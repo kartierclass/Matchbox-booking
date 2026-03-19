@@ -115,6 +115,7 @@ const initSQL = `
   ON CONFLICT DO NOTHING;
 
   DELETE FROM slot_locks;
+  DELETE FROM bookings WHERE turf_id IN (SELECT id FROM turfs WHERE location IN ('Hebbal','Vijayanagar'));
   DELETE FROM slots WHERE turf_id IN (SELECT id FROM turfs WHERE location IN ('Hebbal','Vijayanagar'));
 
   INSERT INTO slots (turf_id, sport, start_time, end_time, price, court_type)

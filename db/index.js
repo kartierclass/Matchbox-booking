@@ -92,7 +92,7 @@ const createTablesSQL = `
     total_amount DECIMAL(10,2),
     ref_code VARCHAR(20) UNIQUE,
     created_at TIMESTAMP DEFAULT NOW(),
-    CONSTRAINT unique_slot_per_date UNIQUE (slot_id, booking_date)
+    -- No unique constraint on slot_id+date: two Half bookings for same slot are valid
   );
 
   CREATE TABLE IF NOT EXISTS slot_locks (

@@ -91,8 +91,7 @@ const createTablesSQL = `
     player_count INT,
     total_amount DECIMAL(10,2),
     ref_code VARCHAR(20) UNIQUE,
-    created_at TIMESTAMP DEFAULT NOW(),
-
+    created_at TIMESTAMP DEFAULT NOW()
   );
 
   CREATE TABLE IF NOT EXISTS slot_locks (

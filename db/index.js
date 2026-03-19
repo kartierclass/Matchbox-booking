@@ -50,7 +50,7 @@ const vijSlots = [
   ...slots30('Box Cricket',17,23,2400,'Full'),
 ].join(',');
 
-const initSQL = `
+const createTablesSQL = `
   CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
   CREATE TABLE IF NOT EXISTS turfs (
@@ -103,54 +103,50 @@ const initSQL = `
     expires_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP DEFAULT NOW()
   );
-
-  DO $$ BEGIN ALTER TABLE slots ADD COLUMN IF NOT EXISTS court_type VARCHAR(20) NOT NULL DEFAULT 'Full'; EXCEPTION WHEN others THEN NULL; END $$;
-  DO $$ BEGIN ALTER TABLE bookings ADD COLUMN IF NOT EXISTS court_type VARCHAR(20); EXCEPTION WHEN others THEN NULL; END $$;
-
-  UPDATE turfs SET is_active = false WHERE location = 'Yadavgiri';
-
-  -- Remove duplicate turf rows (keep oldest per location)
-  DELETE FROM slot_locks;
-  DELETE FROM bookings WHERE turf_id IN (
-    SELECT id FROM turfs WHERE id::text NOT IN (
-      SELECT MIN(id::text) FROM turfs WHERE is_active = true GROUP BY location
-    ) AND is_active = true
-  );
-  DELETE FROM slots WHERE turf_id IN (
-    SELECT id FROM turfs WHERE id::text NOT IN (
-      SELECT MIN(id::text) FROM turfs WHERE is_active = true GROUP BY location
-    ) AND is_active = true
-  );
-  DELETE FROM turfs WHERE id::text NOT IN (
-    SELECT MIN(id::text) FROM turfs GROUP BY location
-  );
-
-  -- Ensure correct turf records exist
-  INSERT INTO turfs (name, location, address) VALUES
-    ('Match-Box Hebbal', 'Hebbal', 'Plot No 31, Survey 115, Hebbal Village, Mysuru 570017'),
-    ('Match-Box Vijayanagar', 'Vijayanagar', '283/2, Vijaya Nagar 3rd Stage, Mysuru 570030')
-  ON CONFLICT DO NOTHING;
-
-  -- Clear slots and reseed
-  DELETE FROM slots WHERE turf_id IN (SELECT id FROM turfs WHERE location IN ('Hebbal','Vijayanagar'));
-
-  INSERT INTO slots (turf_id, sport, start_time, end_time, price, court_type)
-  SELECT t.id, s.sport, s.st::TIME, s.et::TIME, s.price, s.ct
-  FROM turfs t
-  JOIN (VALUES ${hebbalSlots}) AS s(sport,st,et,price,ct) ON true
-  WHERE t.location = 'Hebbal';
-
-  INSERT INTO slots (turf_id, sport, start_time, end_time, price, court_type)
-  SELECT t.id, s.sport, s.st::TIME, s.et::TIME, s.price, s.ct
-  FROM turfs t
-  JOIN (VALUES ${vijSlots}) AS s(sport,st,et,price,ct) ON true
-  WHERE t.location = 'Vijayanagar';
 `;
 
 async function initDb() {
   const client = await pool.connect();
   try {
-    await client.query(initSQL);
+    // Step 1 — always create tables if they don't exist
+    await client.query(createTablesSQL);
+
+    // Step 2 — seed turfs only if empty
+    const turfCount = await client.query('SELECT COUNT(*) FROM turfs WHERE is_active = true');
+    if (parseInt(turfCount.rows[0].count) === 0) {
+      await client.query(`
+        INSERT INTO turfs (name, location, address) VALUES
+          ('Match-Box Hebbal', 'Hebbal', 'Plot No 31, Survey 115, Hebbal Village, Mysuru 570017'),
+          ('Match-Box Vijayanagar', 'Vijayanagar', '283/2, Vijaya Nagar 3rd Stage, Mysuru 570030')
+        ON CONFLICT (location) DO NOTHING
+      `);
+      console.log('✅ Turfs seeded');
+    } else {
+      console.log('✅ Turfs already exist, skipping seed');
+    }
+
+    // Step 3 — seed slots only if empty
+    const slotCount = await client.query('SELECT COUNT(*) FROM slots');
+    if (parseInt(slotCount.rows[0].count) === 0) {
+      await client.query(`
+        INSERT INTO slots (turf_id, sport, start_time, end_time, price, court_type)
+        SELECT t.id, s.sport, s.st::TIME, s.et::TIME, s.price, s.ct
+        FROM turfs t
+        JOIN (VALUES ${hebbalSlots}) AS s(sport,st,et,price,ct) ON true
+        WHERE t.location = 'Hebbal'
+      `);
+      await client.query(`
+        INSERT INTO slots (turf_id, sport, start_time, end_time, price, court_type)
+        SELECT t.id, s.sport, s.st::TIME, s.et::TIME, s.price, s.ct
+        FROM turfs t
+        JOIN (VALUES ${vijSlots}) AS s(sport,st,et,price,ct) ON true
+        WHERE t.location = 'Vijayanagar'
+      `);
+      console.log('✅ Slots seeded');
+    } else {
+      console.log('✅ Slots already exist, skipping seed');
+    }
+
     console.log('✅ Database initialised');
   } catch (err) {
     console.error('DB init error:', err.message);

@@ -5,6 +5,51 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
 });
 
+function slots30(sport, startH, endH, price, courtType) {
+  const rows = [];
+  for (let h = startH; h < endH; h++) {
+    const hStr = String(h).padStart(2,'0');
+    const h1Str = String(h+1).padStart(2,'0');
+    rows.push(`('${sport}','${hStr}:00','${hStr}:30',${price},'${courtType}')`);
+    rows.push(`('${sport}','${hStr}:30','${h1Str}:00',${price},'${courtType}')`);
+  }
+  return rows;
+}
+
+function slots1hr(sport, startH, endH, price, courtType) {
+  const rows = [];
+  for (let h = startH; h < endH; h++) {
+    const hStr = String(h).padStart(2,'0');
+    const h1Str = String(h+1).padStart(2,'0');
+    rows.push(`('${sport}','${hStr}:00','${h1Str}:00',${price},'${courtType}')`);
+  }
+  return rows;
+}
+
+const hebbalSlots = [
+  ...slots30('Football',6,17,900,'Half'),
+  ...slots30('Football',17,23,1400,'Half'),
+  ...slots30('Football',6,17,1800,'Full'),
+  ...slots30('Football',17,23,2500,'Full'),
+  ...slots30('Box Cricket',6,17,900,'Half'),
+  ...slots30('Box Cricket',17,23,1400,'Half'),
+  ...slots30('Box Cricket',6,17,1800,'Full'),
+  ...slots30('Box Cricket',17,23,2500,'Full'),
+  ...slots1hr('Pickleball',6,17,550,'Full'),
+  ...slots1hr('Pickleball',17,23,600,'Full'),
+].join(',');
+
+const vijSlots = [
+  ...slots30('Football',6,17,900,'Half'),
+  ...slots30('Football',17,23,1200,'Half'),
+  ...slots30('Football',6,17,1800,'Full'),
+  ...slots30('Football',17,23,2400,'Full'),
+  ...slots30('Box Cricket',6,17,900,'Half'),
+  ...slots30('Box Cricket',17,23,1200,'Half'),
+  ...slots30('Box Cricket',6,17,1800,'Full'),
+  ...slots30('Box Cricket',17,23,2400,'Full'),
+].join(',');
+
 const initSQL = `
   CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
@@ -21,10 +66,10 @@ const initSQL = `
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     turf_id UUID REFERENCES turfs(id),
     sport VARCHAR(50) NOT NULL,
+    court_type VARCHAR(20) NOT NULL DEFAULT 'Full',
     start_time TIME NOT NULL,
     end_time TIME NOT NULL,
     price DECIMAL(10,2) NOT NULL,
-    days_available VARCHAR(7) DEFAULT '1111111',
     is_active BOOLEAN DEFAULT true
   );
 
@@ -42,6 +87,7 @@ const initSQL = `
     customer_id UUID REFERENCES customers(id),
     booking_date DATE NOT NULL,
     status VARCHAR(20) DEFAULT 'confirmed',
+    court_type VARCHAR(20),
     player_count INT,
     total_amount DECIMAL(10,2),
     ref_code VARCHAR(20) UNIQUE,
@@ -58,47 +104,30 @@ const initSQL = `
     created_at TIMESTAMP DEFAULT NOW()
   );
 
+  DO $$ BEGIN ALTER TABLE slots ADD COLUMN IF NOT EXISTS court_type VARCHAR(20) NOT NULL DEFAULT 'Full'; EXCEPTION WHEN others THEN NULL; END $$;
+  DO $$ BEGIN ALTER TABLE bookings ADD COLUMN IF NOT EXISTS court_type VARCHAR(20); EXCEPTION WHEN others THEN NULL; END $$;
+
+  UPDATE turfs SET is_active = false WHERE location = 'Yadavgiri';
+
   INSERT INTO turfs (name, location, address) VALUES
     ('Match-Box Hebbal', 'Hebbal', 'Plot No 31, Survey 115, Hebbal Village, Mysuru 570017'),
-    ('Match-Box Vijayanagar', 'Vijayanagar', '283/2, Vijaya Nagar 3rd Stage, Mysuru 570030'),
-    ('Match-Box Yadavgiri', 'Yadavgiri', '2nd Main, 8th Cross Rd, Yadavagiri, Mysuru 570020')
+    ('Match-Box Vijayanagar', 'Vijayanagar', '283/2, Vijaya Nagar 3rd Stage, Mysuru 570030')
   ON CONFLICT DO NOTHING;
 
-  INSERT INTO slots (turf_id, sport, start_time, end_time, price)
-  SELECT t.id, s.sport, s.start_time::TIME, s.end_time::TIME, s.price
+  DELETE FROM slot_locks;
+  DELETE FROM slots WHERE turf_id IN (SELECT id FROM turfs WHERE location IN ('Hebbal','Vijayanagar'));
+
+  INSERT INTO slots (turf_id, sport, start_time, end_time, price, court_type)
+  SELECT t.id, s.sport, s.st::TIME, s.et::TIME, s.price, s.ct
   FROM turfs t
-  CROSS JOIN (VALUES
-    ('Football', '05:00', '06:00', 600),
-    ('Football', '06:00', '07:00', 800),
-    ('Football', '07:00', '08:00', 800),
-    ('Football', '08:00', '09:00', 700),
-    ('Football', '09:00', '10:00', 600),
-    ('Football', '16:00', '17:00', 800),
-    ('Football', '17:00', '18:00', 1000),
-    ('Football', '18:00', '19:00', 1200),
-    ('Football', '19:00', '20:00', 1200),
-    ('Football', '20:00', '21:00', 1000),
-    ('Football', '21:00', '22:00', 800),
-    ('Pickleball', '06:00', '07:00', 400),
-    ('Pickleball', '07:00', '08:00', 400),
-    ('Pickleball', '08:00', '09:00', 400),
-    ('Pickleball', '16:00', '17:00', 500),
-    ('Pickleball', '17:00', '18:00', 600),
-    ('Pickleball', '18:00', '19:00', 700),
-    ('Pickleball', '19:00', '20:00', 700),
-    ('Pickleball', '20:00', '21:00', 600),
-    ('Box Cricket', '05:00', '06:00', 700),
-    ('Box Cricket', '06:00', '07:00', 900),
-    ('Box Cricket', '07:00', '08:00', 900),
-    ('Box Cricket', '08:00', '09:00', 800),
-    ('Box Cricket', '17:00', '18:00', 1000),
-    ('Box Cricket', '18:00', '19:00', 1100),
-    ('Box Cricket', '19:00', '20:00', 1100),
-    ('Box Cricket', '20:00', '21:00', 900)
-  ) AS s(sport, start_time, end_time, price)
-  WHERE NOT EXISTS (
-    SELECT 1 FROM slots WHERE turf_id = t.id AND sport = s.sport AND start_time = s.start_time::TIME
-  );
+  JOIN (VALUES ${hebbalSlots}) AS s(sport,st,et,price,ct) ON true
+  WHERE t.location = 'Hebbal';
+
+  INSERT INTO slots (turf_id, sport, start_time, end_time, price, court_type)
+  SELECT t.id, s.sport, s.st::TIME, s.et::TIME, s.price, s.ct
+  FROM turfs t
+  JOIN (VALUES ${vijSlots}) AS s(sport,st,et,price,ct) ON true
+  WHERE t.location = 'Vijayanagar';
 `;
 
 async function initDb() {
@@ -108,6 +137,7 @@ async function initDb() {
     console.log('✅ Database initialised');
   } catch (err) {
     console.error('DB init error:', err.message);
+    throw err;
   } finally {
     client.release();
   }

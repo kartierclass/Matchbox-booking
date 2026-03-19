@@ -131,7 +131,7 @@ router.post('/slots/lock', async (req, res) => {
     );
 
     // Create new lock (10 minutes)
-    const expires = new Date(Date.now() + 10 * 60 * 1000);
+    const expires = new Date(Date.now() + 5 * 60 * 1000);
     await client.query(
       'INSERT INTO slot_locks (id, slot_id, booking_date, locked_by, expires_at) VALUES ($1,$2,$3,$4,$5)',
       [uuidv4(), slot_id, date, phone, expires]
@@ -147,10 +147,10 @@ router.post('/slots/lock', async (req, res) => {
   }
 });
 
-// POST /api/bookings — confirm a booking
+// POST /api/bookings — confirm a booking (supports multiple slots)
 router.post('/bookings', async (req, res) => {
-  const { slot_id, turf_id, date, name, phone, players } = req.body;
-  if (!slot_id || !turf_id || !date || !name || !phone || !players) {
+  const { slot_ids, turf_id, date, name, phone, players, court_type, total_amount } = req.body;
+  if (!slot_ids?.length || !turf_id || !date || !name || !phone || !players) {
     return res.status(400).json({ error: 'All fields are required' });
   }
 
@@ -158,19 +158,17 @@ router.post('/bookings', async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Verify lock still valid for this user
-    const lock = await client.query(
-      `SELECT id FROM slot_locks WHERE slot_id = $1 AND booking_date = $2 AND locked_by = $3 AND expires_at > NOW()`,
-      [slot_id, date, phone]
-    );
-    if (lock.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Your hold expired. Please reselect the slot.' });
+    // Verify all slots are locked by this user
+    for (const slot_id of slot_ids) {
+      const lock = await client.query(
+        `SELECT id FROM slot_locks WHERE slot_id = $1 AND booking_date = $2 AND locked_by = $3 AND expires_at > NOW()`,
+        [slot_id, date, phone]
+      );
+      if (lock.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'One or more holds expired. Please reselect your slots.' });
+      }
     }
-
-    // Get slot price
-    const slotRes = await client.query('SELECT price FROM slots WHERE id = $1', [slot_id]);
-    const price = slotRes.rows[0]?.price;
 
     // Upsert customer
     const custRes = await client.query(
@@ -189,37 +187,44 @@ router.post('/bookings', async (req, res) => {
       if (attempts > 10) throw new Error('Could not generate unique ref');
     } while ((await client.query('SELECT id FROM bookings WHERE ref_code = $1', [ref_code])).rows.length > 0);
 
-    // Insert booking (DB constraint prevents double booking)
-    const { court_type } = req.body;
-    const bookRes = await client.query(
-      `INSERT INTO bookings (id, turf_id, slot_id, customer_id, booking_date, court_type, player_count, total_amount, ref_code)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, ref_code, created_at`,
-      [uuidv4(), turf_id, slot_id, customer_id, date, court_type || 'Full', players, price, ref_code]
-    );
+    // Insert one booking per slot
+    const bookingIds = [];
+    for (const slot_id of slot_ids) {
+      const slotRes = await client.query('SELECT price FROM slots WHERE id = $1', [slot_id]);
+      const price = slotRes.rows[0]?.price;
+      const bid = uuidv4();
+      await client.query(
+        `INSERT INTO bookings (id, turf_id, slot_id, customer_id, booking_date, court_type, player_count, total_amount, ref_code)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [bid, turf_id, slot_id, customer_id, date, court_type || 'Full', players, price,
+         slot_ids.length === 1 ? ref_code : `${ref_code}-${bookingIds.length + 1}`]
+      );
+      bookingIds.push(bid);
+    }
 
-    // Release lock
-    await client.query('DELETE FROM slot_locks WHERE slot_id = $1 AND booking_date = $2', [slot_id, date]);
+    // Release all locks
+    for (const slot_id of slot_ids) {
+      await client.query('DELETE FROM slot_locks WHERE slot_id = $1 AND booking_date = $2', [slot_id, date]);
+    }
 
     await client.query('COMMIT');
 
     res.json({
       success: true,
       booking: {
-        id: bookRes.rows[0].id,
-        ref_code: bookRes.rows[0].ref_code,
-        created_at: bookRes.rows[0].created_at,
+        ref_code,
         name,
         phone,
         players,
-        amount: price,
+        amount: total_amount,
         date,
+        slot_count: slot_ids.length,
       }
     });
   } catch (err) {
     await client.query('ROLLBACK');
-    // Unique constraint violation = double booking
     if (err.code === '23505') {
-      return res.status(409).json({ error: 'This slot was just booked by someone else. Please choose another.' });
+      return res.status(409).json({ error: 'One of these slots was just booked. Please choose again.' });
     }
     res.status(500).json({ error: err.message });
   } finally {

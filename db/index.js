@@ -109,13 +109,29 @@ const initSQL = `
 
   UPDATE turfs SET is_active = false WHERE location = 'Yadavgiri';
 
+  -- Remove duplicate turf rows (keep oldest per location)
+  DELETE FROM slot_locks;
+  DELETE FROM bookings WHERE turf_id IN (
+    SELECT id FROM turfs WHERE id::text NOT IN (
+      SELECT MIN(id::text) FROM turfs WHERE is_active = true GROUP BY location
+    ) AND is_active = true
+  );
+  DELETE FROM slots WHERE turf_id IN (
+    SELECT id FROM turfs WHERE id::text NOT IN (
+      SELECT MIN(id::text) FROM turfs WHERE is_active = true GROUP BY location
+    ) AND is_active = true
+  );
+  DELETE FROM turfs WHERE id::text NOT IN (
+    SELECT MIN(id::text) FROM turfs GROUP BY location
+  );
+
+  -- Ensure correct turf records exist
   INSERT INTO turfs (name, location, address) VALUES
     ('Match-Box Hebbal', 'Hebbal', 'Plot No 31, Survey 115, Hebbal Village, Mysuru 570017'),
     ('Match-Box Vijayanagar', 'Vijayanagar', '283/2, Vijaya Nagar 3rd Stage, Mysuru 570030')
   ON CONFLICT DO NOTHING;
 
-  DELETE FROM slot_locks;
-  DELETE FROM bookings WHERE turf_id IN (SELECT id FROM turfs WHERE location IN ('Hebbal','Vijayanagar'));
+  -- Clear slots and reseed
   DELETE FROM slots WHERE turf_id IN (SELECT id FROM turfs WHERE location IN ('Hebbal','Vijayanagar'));
 
   INSERT INTO slots (turf_id, sport, start_time, end_time, price, court_type)

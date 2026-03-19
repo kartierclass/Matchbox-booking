@@ -46,6 +46,7 @@ router.get('/slots', async (req, res) => {
       SELECT
         s.id,
         s.sport,
+        s.court_type,
         s.start_time,
         s.end_time,
         s.price,
@@ -66,13 +67,15 @@ router.get('/slots', async (req, res) => {
         AND l.expires_at > NOW()
       WHERE s.turf_id = $1
         AND s.sport = $2
+        AND s.court_type = $4
         AND s.is_active = true
       ORDER BY s.start_time
-    `, [turf_id, sport, date]);
+    `, [turf_id, sport, date, court_type || 'Full']);
 
     const slots = rows.map(r => ({
       id: r.id,
       sport: r.sport,
+      court_type: r.court_type,
       time: `${fmtTime(r.start_time)}–${fmtTime(r.end_time)}`,
       start_time: r.start_time,
       end_time: r.end_time,
@@ -187,10 +190,11 @@ router.post('/bookings', async (req, res) => {
     } while ((await client.query('SELECT id FROM bookings WHERE ref_code = $1', [ref_code])).rows.length > 0);
 
     // Insert booking (DB constraint prevents double booking)
+    const { court_type } = req.body;
     const bookRes = await client.query(
-      `INSERT INTO bookings (id, turf_id, slot_id, customer_id, booking_date, player_count, total_amount, ref_code)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, ref_code, created_at`,
-      [uuidv4(), turf_id, slot_id, customer_id, date, players, price, ref_code]
+      `INSERT INTO bookings (id, turf_id, slot_id, customer_id, booking_date, court_type, player_count, total_amount, ref_code)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, ref_code, created_at`,
+      [uuidv4(), turf_id, slot_id, customer_id, date, court_type || 'Full', players, price, ref_code]
     );
 
     // Release lock
@@ -238,7 +242,7 @@ router.get('/bookings', async (req, res) => {
     const { rows } = await pool.query(`
       SELECT
         b.id, b.ref_code, b.booking_date, b.status,
-        b.player_count, b.total_amount, b.created_at,
+        b.court_type, b.player_count, b.total_amount, b.created_at,
         c.name AS customer_name, c.phone AS customer_phone,
         t.name AS turf_name, t.location,
         s.sport,

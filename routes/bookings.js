@@ -31,17 +31,20 @@ router.get('/turfs', async (req, res) => {
   }
 });
 
-// GET /api/slots?turf_id=&sport=&date=
+// GET /api/slots?turf_id=&sport=&date=&court_type=
 router.get('/slots', async (req, res) => {
   const { turf_id, sport, date, court_type } = req.query;
   if (!turf_id || !sport || !date) {
     return res.status(400).json({ error: 'turf_id, sport, and date are required' });
   }
 
+  const requestedCourt = (court_type && court_type !== 'undefined') ? court_type : 'Full';
+  const isPitchSport = ['Football', 'Box Cricket'].includes(sport);
+
   try {
-    // Clean expired locks
     await pool.query('DELETE FROM slot_locks WHERE expires_at < NOW()');
 
+    // Get all slots for this turf/sport/court_type
     const { rows } = await pool.query(`
       SELECT
         s.id,
@@ -50,41 +53,85 @@ router.get('/slots', async (req, res) => {
         s.start_time,
         s.end_time,
         s.price,
-        CASE
-          WHEN b.id IS NOT NULL THEN 'booked'
-          WHEN l.id IS NOT NULL THEN 'held'
-          ELSE 'available'
-        END AS status,
-        l.expires_at AS held_until
+        s.is_active
       FROM slots s
-      LEFT JOIN bookings b
-        ON b.slot_id = s.id
-        AND b.booking_date = $3
-        AND b.status != 'cancelled'
-      LEFT JOIN slot_locks l
-        ON l.slot_id = s.id
-        AND l.booking_date = $3
-        AND l.expires_at > NOW()
       WHERE s.turf_id = $1
         AND s.sport = $2
-        AND s.court_type = $4
+        AND s.court_type = $3
         AND s.is_active = true
       ORDER BY s.start_time
-    `, [turf_id, sport, date, (court_type && court_type !== 'undefined') ? court_type : 'Full']);
+    `, [turf_id, sport, requestedCourt]);
 
-    const slots = rows.map(r => ({
-      id: r.id,
-      sport: r.sport,
-      court_type: r.court_type,
-      time: `${fmtTime(r.start_time)}–${fmtTime(r.end_time)}`,
-      start_time: r.start_time,
-      end_time: r.end_time,
-      price: parseFloat(r.price),
-      status: r.status,
-      held_until: r.held_until || null,
+    // For each slot, calculate capacity usage across BOTH half and full slots at same time
+    const slotData = await Promise.all(rows.map(async (r) => {
+      let status = 'available';
+
+      if (isPitchSport) {
+        // Get all bookings for this turf/sport/start_time on this date (both Half and Full)
+        const cap = await pool.query(`
+          SELECT
+            COALESCE(SUM(CASE WHEN sl.court_type = 'Full' THEN 2 ELSE 1 END), 0) AS units_booked,
+            COALESCE(SUM(CASE WHEN sl.court_type = 'Full' THEN 2 ELSE 1 END), 0) AS confirmed_units
+          FROM bookings b
+          JOIN slots sl ON sl.id = b.slot_id
+          WHERE sl.turf_id = $1
+            AND sl.sport = $2
+            AND sl.start_time = $3
+            AND b.booking_date = $4
+            AND b.status != 'cancelled'
+        `, [turf_id, sport, r.start_time, date]);
+
+        // Also check locks (count as held capacity)
+        const locks = await pool.query(`
+          SELECT COALESCE(SUM(CASE WHEN sl.court_type = 'Full' THEN 2 ELSE 1 END), 0) AS units_locked
+          FROM slot_locks l
+          JOIN slots sl ON sl.id = l.slot_id
+          WHERE sl.turf_id = $1
+            AND sl.sport = $2
+            AND sl.start_time = $3
+            AND l.booking_date = $4
+            AND l.expires_at > NOW()
+        `, [turf_id, sport, r.start_time, date]);
+
+        const confirmedUnits = parseInt(cap.rows[0].units_booked) || 0;
+        const lockedUnits = parseInt(locks.rows[0].units_locked) || 0;
+        const totalUnits = confirmedUnits + lockedUnits;
+        const thisSlotUnits = requestedCourt === 'Full' ? 2 : 1;
+
+        if (confirmedUnits >= 2) {
+          status = 'booked'; // fully confirmed booked
+        } else if (totalUnits + thisSlotUnits > 2) {
+          status = 'held'; // would exceed capacity due to locks
+        } else if (confirmedUnits + thisSlotUnits > 2) {
+          status = 'booked';
+        }
+      } else {
+        // Pickleball — simple 1:1 check
+        const booked = await pool.query(
+          `SELECT id FROM bookings WHERE slot_id = $1 AND booking_date = $2 AND status != 'cancelled'`,
+          [r.id, date]
+        );
+        const locked = await pool.query(
+          `SELECT id FROM slot_locks WHERE slot_id = $1 AND booking_date = $2 AND expires_at > NOW()`,
+          [r.id, date]
+        );
+        if (booked.rows.length > 0) status = 'booked';
+        else if (locked.rows.length > 0) status = 'held';
+      }
+
+      return {
+        id: r.id,
+        sport: r.sport,
+        court_type: r.court_type,
+        time: `${fmtTime(r.start_time)}–${fmtTime(r.end_time)}`,
+        start_time: r.start_time,
+        end_time: r.end_time,
+        price: parseFloat(r.price),
+        status,
+      };
     }));
 
-    res.json(slots);
+    res.json(slotData);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -104,24 +151,64 @@ router.post('/slots/lock', async (req, res) => {
     // Clean expired locks
     await client.query('DELETE FROM slot_locks WHERE expires_at < NOW()');
 
-    // Check if slot is already booked
-    const booked = await client.query(
-      `SELECT id FROM bookings WHERE slot_id = $1 AND booking_date = $2 AND status != 'cancelled'`,
-      [slot_id, date]
+    // Get this slot's details
+    const slotInfo = await client.query(
+      'SELECT turf_id, sport, start_time, court_type FROM slots WHERE id = $1',
+      [slot_id]
     );
-    if (booked.rows.length > 0) {
+    if (!slotInfo.rows.length) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Slot already booked' });
+      return res.status(404).json({ error: 'Slot not found' });
     }
+    const { turf_id, sport, start_time, court_type } = slotInfo.rows[0];
+    const isPitchSport = ['Football', 'Box Cricket'].includes(sport);
+    const thisUnits = court_type === 'Full' ? 2 : 1;
 
-    // Check if slot is locked by someone else
-    const locked = await client.query(
-      `SELECT locked_by FROM slot_locks WHERE slot_id = $1 AND booking_date = $2 AND expires_at > NOW()`,
-      [slot_id, date]
-    );
-    if (locked.rows.length > 0 && locked.rows[0].locked_by !== phone) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Slot is currently held by another user' });
+    if (isPitchSport) {
+      // Capacity check — count confirmed bookings + locks (excluding this user's own locks)
+      const cap = await client.query(`
+        SELECT COALESCE(SUM(CASE WHEN sl.court_type = 'Full' THEN 2 ELSE 1 END), 0) AS units
+        FROM bookings b
+        JOIN slots sl ON sl.id = b.slot_id
+        WHERE sl.turf_id = $1 AND sl.sport = $2 AND sl.start_time = $3
+          AND b.booking_date = $4 AND b.status != 'cancelled'
+      `, [turf_id, sport, start_time, date]);
+
+      const locks = await client.query(`
+        SELECT COALESCE(SUM(CASE WHEN sl.court_type = 'Full' THEN 2 ELSE 1 END), 0) AS units
+        FROM slot_locks l
+        JOIN slots sl ON sl.id = l.slot_id
+        WHERE sl.turf_id = $1 AND sl.sport = $2 AND sl.start_time = $3
+          AND l.booking_date = $4 AND l.expires_at > NOW()
+          AND l.locked_by != $5
+      `, [turf_id, sport, start_time, date, phone]);
+
+      const usedUnits = parseInt(cap.rows[0].units) + parseInt(locks.rows[0].units);
+      if (usedUnits + thisUnits > 2) {
+        await client.query('ROLLBACK');
+        const msg = court_type === 'Full'
+          ? 'Full court not available — a half court is already booked for this slot'
+          : 'Both halves are already taken for this slot';
+        return res.status(409).json({ error: msg });
+      }
+    } else {
+      // Pickleball — simple check
+      const booked = await client.query(
+        `SELECT id FROM bookings WHERE slot_id = $1 AND booking_date = $2 AND status != 'cancelled'`,
+        [slot_id, date]
+      );
+      if (booked.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'Slot already booked' });
+      }
+      const locked = await client.query(
+        `SELECT locked_by FROM slot_locks WHERE slot_id = $1 AND booking_date = $2 AND expires_at > NOW()`,
+        [slot_id, date]
+      );
+      if (locked.rows.length > 0 && locked.rows[0].locked_by !== phone) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'Slot is currently held by another user' });
+      }
     }
 
     // Remove any existing lock by this user for this slot
@@ -158,7 +245,7 @@ router.post('/bookings', async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Verify all slots are locked by this user
+    // Verify all slots are locked by this user + capacity still valid
     for (const slot_id of slot_ids) {
       const lock = await client.query(
         `SELECT id FROM slot_locks WHERE slot_id = $1 AND booking_date = $2 AND locked_by = $3 AND expires_at > NOW()`,
@@ -167,6 +254,31 @@ router.post('/bookings', async (req, res) => {
       if (lock.rows.length === 0) {
         await client.query('ROLLBACK');
         return res.status(409).json({ error: 'One or more holds expired. Please reselect your slots.' });
+      }
+
+      // Final capacity check at booking time
+      const slotInfo = await client.query(
+        'SELECT turf_id, sport, start_time, court_type FROM slots WHERE id = $1',
+        [slot_id]
+      );
+      const { turf_id: tid, sport, start_time, court_type: ct } = slotInfo.rows[0];
+      const isPitchSport = ['Football', 'Box Cricket'].includes(sport);
+
+      if (isPitchSport) {
+        const thisUnits = ct === 'Full' ? 2 : 1;
+        const cap = await client.query(`
+          SELECT COALESCE(SUM(CASE WHEN sl.court_type = 'Full' THEN 2 ELSE 1 END), 0) AS units
+          FROM bookings b
+          JOIN slots sl ON sl.id = b.slot_id
+          WHERE sl.turf_id = $1 AND sl.sport = $2 AND sl.start_time = $3
+            AND b.booking_date = $4 AND b.status != 'cancelled'
+        `, [tid, sport, start_time, date]);
+
+        const usedUnits = parseInt(cap.rows[0].units);
+        if (usedUnits + thisUnits > 2) {
+          await client.query('ROLLBACK');
+          return res.status(409).json({ error: 'This slot was just taken. Please choose another.' });
+        }
       }
     }
 
@@ -224,7 +336,7 @@ router.post('/bookings', async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     if (err.code === '23505') {
-      return res.status(409).json({ error: 'One of these slots was just booked. Please choose again.' });
+      return res.status(409).json({ error: 'One of these slots was just taken. Please choose another.' });
     }
     res.status(500).json({ error: err.message });
   } finally {

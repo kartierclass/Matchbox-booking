@@ -70,7 +70,7 @@ router.get('/slots', async (req, res) => {
         AND s.court_type = $4
         AND s.is_active = true
       ORDER BY s.start_time
-    `, [turf_id, sport, date, court_type || 'Full']);
+    `, [turf_id, sport, date, (court_type && court_type !== 'undefined') ? court_type : 'Full']);
 
     const slots = rows.map(r => ({
       id: r.id,

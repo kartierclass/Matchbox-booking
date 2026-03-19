@@ -33,7 +33,7 @@ router.get('/turfs', async (req, res) => {
 
 // GET /api/slots?turf_id=&sport=&date=
 router.get('/slots', async (req, res) => {
-  const { turf_id, sport, date } = req.query;
+  const { turf_id, sport, date, court_type } = req.query;
   if (!turf_id || !sport || !date) {
     return res.status(400).json({ error: 'turf_id, sport, and date are required' });
   }

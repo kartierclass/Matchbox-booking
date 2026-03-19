@@ -161,6 +161,14 @@ router.post('/slots/lock', async (req, res) => {
       return res.status(404).json({ error: 'Slot not found' });
     }
     const { turf_id, sport, start_time, court_type } = slotInfo.rows[0];
+
+    // Check slot is not in the past
+    const slotDateTime = new Date(`${date}T${start_time}`);
+    const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    if (slotDateTime < nowIST) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'This slot has already passed' });
+    }
     const isPitchSport = ['Football', 'Box Cricket'].includes(sport);
     const thisUnits = court_type === 'Full' ? 2 : 1;
 
@@ -409,6 +417,28 @@ router.get('/stats', async (req, res) => {
       today_bookings: parseInt(today.rows[0].count),
       active_turfs: parseInt(turfs.rows[0].count),
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/customers
+router.get('/customers', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        c.id,
+        c.name,
+        c.phone,
+        c.created_at,
+        COUNT(b.id) AS total_bookings,
+        MAX(b.created_at) AS last_booking
+      FROM customers c
+      LEFT JOIN bookings b ON b.customer_id = c.id AND b.status != 'cancelled'
+      GROUP BY c.id
+      ORDER BY total_bookings DESC, c.created_at DESC
+    `);
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

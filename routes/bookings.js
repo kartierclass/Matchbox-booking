@@ -463,4 +463,156 @@ router.get('/customers', async (req, res) => {
   }
 });
 
+// POST /api/admin/booking — admin makes a booking on behalf of customer
+router.post('/admin/booking', async (req, res) => {
+  const { slot_ids, turf_id, date, name, phone, court_type, note } = req.body;
+  if (!slot_ids?.length || !turf_id || !date || !name || !phone) {
+    return res.status(400).json({ error: 'slot_ids, turf_id, date, name and phone are required' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Upsert customer
+    const custRes = await client.query(
+      `INSERT INTO customers (id, phone, name) VALUES ($1, $2, $3)
+       ON CONFLICT (phone) DO UPDATE SET name = EXCLUDED.name RETURNING id`,
+      [uuidv4(), phone, name]
+    );
+    const customer_id = custRes.rows[0].id;
+
+    // Generate ref
+    let ref_code, attempts = 0;
+    do {
+      ref_code = genRef();
+      attempts++;
+      if (attempts > 10) throw new Error('Could not generate unique ref');
+    } while ((await client.query('SELECT id FROM bookings WHERE ref_code = $1', [ref_code])).rows.length > 0);
+
+    // Capacity check and insert for each slot
+    const bookingIds = [];
+    for (const slot_id of slot_ids) {
+      const slotInfo = await client.query(
+        'SELECT turf_id, sport, start_time, court_type, price FROM slots WHERE id = $1',
+        [slot_id]
+      );
+      const sl = slotInfo.rows[0];
+      const isPitchSport = ['Football', 'Box Cricket'].includes(sl.sport);
+
+      if (isPitchSport) {
+        const cap = await client.query(`
+          SELECT COALESCE(SUM(CASE WHEN sl.court_type = 'Full' THEN 2 ELSE 1 END), 0) AS units
+          FROM bookings b JOIN slots sl ON sl.id = b.slot_id
+          WHERE sl.turf_id = $1 AND sl.sport = $2 AND sl.start_time = $3
+            AND b.booking_date = $4 AND b.status != 'cancelled'
+        `, [sl.turf_id, sl.sport, sl.start_time, date]);
+        const ct = court_type || sl.court_type;
+        const thisUnits = ct === 'Full' ? 2 : 1;
+        if (parseInt(cap.rows[0].units) + thisUnits > 2) {
+          await client.query('ROLLBACK');
+          return res.status(409).json({ error: `Slot ${fmtTime(sl.start_time)} is already fully booked` });
+        }
+      } else {
+        const booked = await client.query(
+          `SELECT id FROM bookings WHERE slot_id = $1 AND booking_date = $2 AND status != 'cancelled'`,
+          [slot_id, date]
+        );
+        if (booked.rows.length > 0) {
+          await client.query('ROLLBACK');
+          return res.status(409).json({ error: `Slot ${fmtTime(sl.start_time)} is already booked` });
+        }
+      }
+
+      const bid = uuidv4();
+      const slotRef = slot_ids.length === 1 ? ref_code : `${ref_code}-${bookingIds.length + 1}`;
+      await client.query(
+        `INSERT INTO bookings (id, turf_id, slot_id, customer_id, booking_date, court_type, player_count, total_amount, ref_code, status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'confirmed')`,
+        [bid, turf_id, slot_id, customer_id, date, court_type || sl.court_type, 1, sl.price, slotRef]
+      );
+      bookingIds.push(bid);
+    }
+
+    await client.query('COMMIT');
+    res.json({ success: true, ref_code, booking_count: bookingIds.length });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    if (err.code === '23505') return res.status(409).json({ error: 'One of these slots was just booked' });
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/admin/block — block a slot
+router.post('/admin/block', async (req, res) => {
+  const { slot_ids, turf_id, date, reason } = req.body;
+  if (!slot_ids?.length || !turf_id || !date) {
+    return res.status(400).json({ error: 'slot_ids, turf_id, and date are required' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Find or create a system "blocked" customer
+    let custRes = await client.query(`SELECT id FROM customers WHERE phone = 'BLOCKED'`);
+    if (!custRes.rows.length) {
+      custRes = await client.query(
+        `INSERT INTO customers (id, phone, name) VALUES ($1, 'BLOCKED', 'BLOCKED') RETURNING id`,
+        [uuidv4()]
+      );
+    }
+    const customer_id = custRes.rows[0].id;
+
+    const blocked = [];
+    for (const slot_id of slot_ids) {
+      const existing = await client.query(
+        `SELECT id FROM bookings WHERE slot_id = $1 AND booking_date = $2 AND status != 'cancelled'`,
+        [slot_id, date]
+      );
+      if (existing.rows.length > 0) {
+        await client.query('ROLLBACK');
+        const slotInfo = await pool.query('SELECT start_time FROM slots WHERE id = $1', [slot_id]);
+        return res.status(409).json({ error: `Slot ${fmtTime(slotInfo.rows[0]?.start_time)} already has a booking` });
+      }
+
+      const slotInfo = await client.query('SELECT turf_id, price, court_type FROM slots WHERE id = $1', [slot_id]);
+      const sl = slotInfo.rows[0];
+      const ref = 'BLK-' + Math.random().toString(36).substring(2,8).toUpperCase();
+
+      await client.query(
+        `INSERT INTO bookings (id, turf_id, slot_id, customer_id, booking_date, court_type, player_count, total_amount, ref_code, status)
+         VALUES ($1,$2,$3,$4,$5,$6,0,0,$7,'blocked')`,
+        [uuidv4(), turf_id, slot_id, customer_id, date, sl.court_type, ref]
+      );
+      blocked.push(slot_id);
+    }
+
+    await client.query('COMMIT');
+    res.json({ success: true, blocked_count: blocked.length, reason });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// DELETE /api/admin/block — unblock a slot
+router.delete('/admin/block', async (req, res) => {
+  const { slot_id, date } = req.body;
+  if (!slot_id || !date) return res.status(400).json({ error: 'slot_id and date required' });
+  try {
+    await pool.query(
+      `UPDATE bookings SET status = 'cancelled' WHERE slot_id = $1 AND booking_date = $2 AND status = 'blocked'`,
+      [slot_id, date]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

@@ -408,15 +408,55 @@ router.get('/bookings', async (req, res) => {
 
 // PATCH /api/bookings/:id/cancel — admin: cancel a booking
 router.patch('/bookings/:id/cancel', async (req, res) => {
+  const client = await pool.connect();
   try {
-    const { rows } = await pool.query(
-      `UPDATE bookings SET status = 'cancelled' WHERE id = $1 RETURNING id, ref_code`,
+    await client.query('BEGIN');
+
+    // Get booking details before cancelling
+    const bookingRes = await client.query(
+      `SELECT id, ref_code, member_id, total_amount, status FROM bookings WHERE id = $1`,
       [req.params.id]
     );
-    if (rows.length === 0) return res.status(404).json({ error: 'Booking not found' });
-    res.json({ success: true, ref_code: rows[0].ref_code });
+    if (bookingRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+    const booking = bookingRes.rows[0];
+    if (booking.status === 'cancelled') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Booking already cancelled' });
+    }
+
+    // Cancel the booking
+    await client.query(
+      `UPDATE bookings SET status = 'cancelled' WHERE id = $1`,
+      [req.params.id]
+    );
+
+    // Refund wallet if member booking
+    if (booking.member_id && parseFloat(booking.total_amount) > 0) {
+      await client.query(
+        'UPDATE members SET balance = balance + $1 WHERE id = $2',
+        [parseFloat(booking.total_amount), booking.member_id]
+      );
+      await client.query(
+        `INSERT INTO wallet_transactions (id, member_id, type, amount, reference, note)
+         VALUES ($1, $2, 'topup', $3, $4, 'Refund for cancelled booking')`,
+        [uuidv4(), booking.member_id, parseFloat(booking.total_amount), booking.ref_code]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({
+      success: true,
+      ref_code: booking.ref_code,
+      refunded: booking.member_id ? parseFloat(booking.total_amount) : 0,
+    });
   } catch (err) {
+    await client.query('ROLLBACK');
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 

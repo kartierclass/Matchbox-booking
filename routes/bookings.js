@@ -375,7 +375,7 @@ router.post('/bookings', async (req, res) => {
 router.get('/bookings', async (req, res) => {
   const { date, turf_id, status } = req.query;
   try {
-    let where = ['b.status != $1'];
+    let where = ['b.status != $1', 'b.member_id IS NULL'];
     let params = ['deleted'];
     let idx = 2;
 

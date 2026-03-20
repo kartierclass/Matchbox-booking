@@ -424,9 +424,9 @@ router.patch('/bookings/:id/cancel', async (req, res) => {
 router.get('/stats', async (req, res) => {
   try {
     const [bookings, revenue, today, turfs] = await Promise.all([
-      pool.query(`SELECT COUNT(*) FROM bookings WHERE status = 'confirmed'`),
-      pool.query(`SELECT COALESCE(SUM(total_amount),0) AS total FROM bookings WHERE status = 'confirmed'`),
-      pool.query(`SELECT COUNT(*) FROM bookings WHERE booking_date = CURRENT_DATE AND status = 'confirmed'`),
+      pool.query(`SELECT COUNT(*) FROM bookings WHERE status = 'confirmed' AND member_id IS NULL`),
+      pool.query(`SELECT COALESCE(SUM(total_amount),0) AS total FROM bookings WHERE status = 'confirmed' AND member_id IS NULL`),
+      pool.query(`SELECT COUNT(*) FROM bookings WHERE booking_date = CURRENT_DATE AND status = 'confirmed' AND member_id IS NULL`),
       pool.query(`SELECT COUNT(*) FROM turfs WHERE is_active = true`),
     ]);
 

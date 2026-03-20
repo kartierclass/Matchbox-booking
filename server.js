@@ -1,7 +1,9 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { initDb } = require('./db');
 const bookingsRouter = require('./routes/bookings');
+const membersRouter = require('./routes/members');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -16,6 +18,7 @@ app.get('/health', (_, res) => res.json({ status: 'ok', time: new Date() }));
 
 // Routes
 app.use('/api', bookingsRouter);
+app.use('/api/members', membersRouter);
 
 // Auto-clean expired locks every 5 minutes
 const { pool } = require('./db');

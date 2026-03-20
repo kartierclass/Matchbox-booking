@@ -27,27 +27,27 @@ function slots1hr(sport, startH, endH, price, courtType) {
 }
 
 const hebbalSlots = [
-  ...slots30('Football',6,17,900,'Half'),
-  ...slots30('Football',17,23,1400,'Half'),
-  ...slots30('Football',6,17,1800,'Full'),
-  ...slots30('Football',17,23,2500,'Full'),
-  ...slots30('Box Cricket',6,17,900,'Half'),
-  ...slots30('Box Cricket',17,23,1400,'Half'),
-  ...slots30('Box Cricket',6,17,1800,'Full'),
-  ...slots30('Box Cricket',17,23,2500,'Full'),
+  ...slots30('Football',6,17,450,'Half'),
+  ...slots30('Football',17,23,700,'Half'),
+  ...slots30('Football',6,17,900,'Full'),
+  ...slots30('Football',17,23,1250,'Full'),
+  ...slots30('Box Cricket',6,17,450,'Half'),
+  ...slots30('Box Cricket',17,23,700,'Half'),
+  ...slots30('Box Cricket',6,17,900,'Full'),
+  ...slots30('Box Cricket',17,23,1250,'Full'),
   ...slots1hr('Pickleball',6,17,550,'Full'),
   ...slots1hr('Pickleball',17,23,600,'Full'),
 ].join(',');
 
 const vijSlots = [
-  ...slots30('Football',6,17,900,'Half'),
-  ...slots30('Football',17,23,1200,'Half'),
-  ...slots30('Football',6,17,1800,'Full'),
-  ...slots30('Football',17,23,2400,'Full'),
-  ...slots30('Box Cricket',6,17,900,'Half'),
-  ...slots30('Box Cricket',17,23,1200,'Half'),
-  ...slots30('Box Cricket',6,17,1800,'Full'),
-  ...slots30('Box Cricket',17,23,2400,'Full'),
+  ...slots30('Football',6,17,450,'Half'),
+  ...slots30('Football',17,23,600,'Half'),
+  ...slots30('Football',6,17,900,'Full'),
+  ...slots30('Football',17,23,1200,'Full'),
+  ...slots30('Box Cricket',6,17,450,'Half'),
+  ...slots30('Box Cricket',17,23,600,'Half'),
+  ...slots30('Box Cricket',6,17,900,'Full'),
+  ...slots30('Box Cricket',17,23,1200,'Full'),
 ].join(',');
 
 const createTablesSQL = `

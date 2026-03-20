@@ -244,7 +244,7 @@ router.post('/slots/lock', async (req, res) => {
 
 // POST /api/bookings — confirm a booking (supports multiple slots)
 router.post('/bookings', async (req, res) => {
-  const { slot_ids, turf_id, date, name, phone, players, court_type, total_amount } = req.body;
+  const { slot_ids, turf_id, date, name, phone, players, court_type, total_amount, member_id } = req.body;
   if (!slot_ids?.length || !turf_id || !date || !name || !phone || !players) {
     return res.status(400).json({ error: 'All fields are required' });
   }
@@ -325,6 +325,25 @@ router.post('/bookings', async (req, res) => {
     // Release all locks
     for (const slot_id of slot_ids) {
       await client.query('DELETE FROM slot_locks WHERE slot_id = $1 AND booking_date = $2', [slot_id, date]);
+    }
+
+    // Wallet deduction if member booking
+    if (member_id) {
+      const totalAmt = parseFloat(total_amount) || 0;
+      // Update all booking rows with member_id
+      for (const bid of bookingIds) {
+        await client.query('UPDATE bookings SET member_id = $1 WHERE id = $2', [member_id, bid]);
+      }
+      // Deduct from wallet
+      await client.query(
+        'UPDATE members SET balance = balance - $1 WHERE id = $2',
+        [totalAmt, member_id]
+      );
+      await client.query(
+        `INSERT INTO wallet_transactions (id, member_id, type, amount, reference, note)
+         VALUES ($1, $2, 'deduction', $3, $4, 'Booking deduction')`,
+        [uuidv4(), member_id, totalAmt, ref_code]
+      );
     }
 
     await client.query('COMMIT');

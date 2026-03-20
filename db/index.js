@@ -102,6 +102,28 @@ const createTablesSQL = `
     expires_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP DEFAULT NOW()
   );
+
+  CREATE TABLE IF NOT EXISTS members (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(100) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    invite_code VARCHAR(20) UNIQUE NOT NULL,
+    balance DECIMAL(10,2) DEFAULT 0,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS wallet_transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    member_id UUID REFERENCES members(id),
+    type VARCHAR(20) NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    reference VARCHAR(50),
+    note TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+  );
+
+  DO $$ BEGIN ALTER TABLE bookings ADD COLUMN IF NOT EXISTS member_id UUID REFERENCES members(id); EXCEPTION WHEN others THEN NULL; END $$;
 `;
 
 async function initDb() {

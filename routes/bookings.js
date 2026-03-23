@@ -327,23 +327,30 @@ router.post('/bookings', async (req, res) => {
       await client.query('DELETE FROM slot_locks WHERE slot_id = $1 AND booking_date = $2', [slot_id, date]);
     }
 
-    // Wallet deduction if member booking
+    // Wallet deduction if member booking — deduct per slot so cancellation refunds are accurate
     if (member_id) {
-      const totalAmt = parseFloat(total_amount) || 0;
-      // Update all booking rows with member_id
-      for (const bid of bookingIds) {
+      for (let i = 0; i < bookingIds.length; i++) {
+        const bid = bookingIds[i];
+        const slotRes = await client.query('SELECT price FROM slots WHERE id = $1', [slot_ids[i]]);
+        const slotPrice = parseFloat(slotRes.rows[0]?.price) || 0;
+        const slotRef = slot_ids.length === 1 ? ref_code : `${ref_code}-${i + 1}`;
+
+        // Tag booking with member_id
         await client.query('UPDATE bookings SET member_id = $1 WHERE id = $2', [member_id, bid]);
+
+        // Deduct this slot's price from wallet
+        await client.query(
+          'UPDATE members SET balance = balance - $1 WHERE id = $2',
+          [slotPrice, member_id]
+        );
+
+        // One wallet transaction per slot
+        await client.query(
+          `INSERT INTO wallet_transactions (id, member_id, type, amount, reference, note)
+           VALUES ($1, $2, 'deduction', $3, $4, 'Booking deduction')`,
+          [uuidv4(), member_id, slotPrice, slotRef]
+        );
       }
-      // Deduct from wallet
-      await client.query(
-        'UPDATE members SET balance = balance - $1 WHERE id = $2',
-        [totalAmt, member_id]
-      );
-      await client.query(
-        `INSERT INTO wallet_transactions (id, member_id, type, amount, reference, note)
-         VALUES ($1, $2, 'deduction', $3, $4, 'Booking deduction')`,
-        [uuidv4(), member_id, totalAmt, ref_code]
-      );
     }
 
     await client.query('COMMIT');

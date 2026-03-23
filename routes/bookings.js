@@ -226,7 +226,7 @@ router.post('/slots/lock', async (req, res) => {
     );
 
     // Create new lock (10 minutes)
-    const expires = new Date(Date.now() + 5 * 60 * 1000);
+    const expires = new Date(Date.now() + 2 * 60 * 1000);
     await client.query(
       'INSERT INTO slot_locks (id, slot_id, booking_date, locked_by, expires_at) VALUES ($1,$2,$3,$4,$5)',
       [uuidv4(), slot_id, date, phone, expires]

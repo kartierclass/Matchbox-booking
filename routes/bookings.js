@@ -522,14 +522,6 @@ router.patch('/bookings/:id/cancel', async (req, res) => {
     client.release();
   }
 });
-    });
-  } catch (err) {
-    await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
-  } finally {
-    client.release();
-  }
-});
 
 // GET /api/stats — admin dashboard stats
 router.get('/stats', async (req, res) => {

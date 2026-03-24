@@ -378,7 +378,7 @@ router.post('/bookings', async (req, res) => {
   }
 });
 
-// GET /api/bookings — admin: list all bookings
+// GET /api/bookings — admin: list all bookings, grouped by base ref code
 router.get('/bookings', async (req, res) => {
   const { date, turf_id, status } = req.query;
   try {
@@ -397,6 +397,8 @@ router.get('/bookings', async (req, res) => {
         c.name AS customer_name, c.phone AS customer_phone,
         t.name AS turf_name, t.location,
         s.sport,
+        s.start_time AS start_time_raw,
+        s.end_time AS end_time_raw,
         TO_CHAR(s.start_time, 'HH12:MI AM') AS start_time,
         TO_CHAR(s.end_time, 'HH12:MI AM') AS end_time
       FROM bookings b
@@ -407,19 +409,59 @@ router.get('/bookings', async (req, res) => {
       ORDER BY b.booking_date DESC, s.start_time ASC
     `, params);
 
-    res.json(rows);
+    // Group rows by base ref code (strip trailing -1, -2 etc)
+    const grouped = {};
+    for (const row of rows) {
+      const baseRef = row.ref_code.replace(/-\d+$/, '');
+      if (!grouped[baseRef]) {
+        grouped[baseRef] = { ...row, ref_code: baseRef, slot_ids: [row.id], total_amount: parseFloat(row.total_amount) };
+      } else {
+        grouped[baseRef].slot_ids.push(row.id);
+        grouped[baseRef].total_amount += parseFloat(row.total_amount);
+        // Expand time range — keep earliest start, latest end
+        if (row.start_time_raw < grouped[baseRef].start_time_raw) {
+          grouped[baseRef].start_time_raw = row.start_time_raw;
+          grouped[baseRef].start_time = row.start_time;
+        }
+        if (row.end_time_raw > grouped[baseRef].end_time_raw) {
+          grouped[baseRef].end_time_raw = row.end_time_raw;
+          grouped[baseRef].end_time = row.end_time;
+        }
+      }
+    }
+
+    const result = Object.values(grouped).map(g => ({
+      id: g.slot_ids[0], // primary id for cancel (backend will cancel all by base ref)
+      ref_code: g.ref_code,
+      booking_date: g.booking_date,
+      status: g.status,
+      court_type: g.court_type,
+      player_count: g.player_count,
+      total_amount: g.total_amount,
+      created_at: g.created_at,
+      customer_name: g.customer_name,
+      customer_phone: g.customer_phone,
+      turf_name: g.turf_name,
+      location: g.location,
+      sport: g.sport,
+      start_time: g.start_time,
+      end_time: g.end_time,
+      slot_count: g.slot_ids.length,
+    }));
+
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// PATCH /api/bookings/:id/cancel — admin: cancel a booking
+// PATCH /api/bookings/:id/cancel — admin: cancel all slots in a booking group
 router.patch('/bookings/:id/cancel', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // Get booking details before cancelling
+    // Get the clicked booking row to find its base ref
     const bookingRes = await client.query(
       `SELECT id, ref_code, member_id, total_amount, status FROM bookings WHERE id = $1`,
       [req.params.id]
@@ -434,30 +476,52 @@ router.patch('/bookings/:id/cancel', async (req, res) => {
       return res.status(400).json({ error: 'Booking already cancelled' });
     }
 
-    // Cancel the booking
-    await client.query(
-      `UPDATE bookings SET status = 'cancelled' WHERE id = $1`,
-      [req.params.id]
-    );
+    // Derive base ref (strip trailing -1, -2 etc)
+    const baseRef = booking.ref_code.replace(/-\d+$/, '');
 
-    // Refund wallet if member booking
-    if (booking.member_id && parseFloat(booking.total_amount) > 0) {
+    // Find all bookings in this group (same base ref)
+    const groupRes = await client.query(
+      `SELECT id, ref_code, member_id, total_amount FROM bookings
+       WHERE (ref_code = $1 OR ref_code LIKE $2) AND status != 'cancelled'`,
+      [baseRef, `${baseRef}-%`]
+    );
+    const group = groupRes.rows;
+
+    // Cancel all of them
+    for (const b of group) {
+      await client.query(`UPDATE bookings SET status = 'cancelled' WHERE id = $1`, [b.id]);
+    }
+
+    // Refund wallet — sum all slot amounts for this group
+    const memberId = group.find(b => b.member_id)?.member_id;
+    const totalRefund = group.reduce((sum, b) => sum + parseFloat(b.total_amount || 0), 0);
+
+    if (memberId && totalRefund > 0) {
       await client.query(
         'UPDATE members SET balance = balance + $1 WHERE id = $2',
-        [parseFloat(booking.total_amount), booking.member_id]
+        [totalRefund, memberId]
       );
       await client.query(
         `INSERT INTO wallet_transactions (id, member_id, type, amount, reference, note)
          VALUES ($1, $2, 'topup', $3, $4, 'Refund for cancelled booking')`,
-        [uuidv4(), booking.member_id, parseFloat(booking.total_amount), booking.ref_code]
+        [uuidv4(), memberId, totalRefund, baseRef]
       );
     }
 
     await client.query('COMMIT');
     res.json({
       success: true,
-      ref_code: booking.ref_code,
-      refunded: booking.member_id ? parseFloat(booking.total_amount) : 0,
+      ref_code: baseRef,
+      cancelled_count: group.length,
+      refunded: memberId ? totalRefund : 0,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
     });
   } catch (err) {
     await client.query('ROLLBACK');

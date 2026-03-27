@@ -83,12 +83,50 @@
   .toast.error{background:var(--danger);color:white;}
 
   @media(max-width:768px){
+    /* LAYOUT */
     body{flex-direction:column;}
-    .sidebar{width:100%;height:auto;position:relative;}
-    .sb-nav{display:flex;padding:0;overflow-x:auto;}
-    .sb-item{border-left:none;border-bottom:2px solid transparent;white-space:nowrap;padding:0.75rem 1rem;}
+    .sidebar{width:100%;height:auto;position:sticky;top:0;z-index:50;}
+    .sb-logo{padding:0.75rem 1rem;font-size:1.1rem;}
+    .sb-nav{display:flex;padding:0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+    .sb-nav::-webkit-scrollbar{display:none;}
+    .sb-item{border-left:none;border-bottom:2px solid transparent;white-space:nowrap;padding:0.65rem 0.9rem;font-size:0.8rem;}
     .sb-item.active{border-bottom-color:var(--green);border-left:none;}
     .sb-footer{display:none;}
+    .content{padding:1rem;}
+
+    /* STATS */
+    .stats-grid{grid-template-columns:repeat(2,1fr);gap:0.75rem;margin-bottom:1.25rem;}
+    .stat-val{font-size:1.8rem;}
+
+    /* PAGE HEADER */
+    .page-header{flex-direction:column;align-items:flex-start;gap:0.75rem;margin-bottom:1rem;}
+
+    /* FILTERS */
+    .filters{gap:0.5rem;}
+    .filter-select{font-size:0.8rem;padding:0.45rem 0.6rem;flex:1;min-width:0;}
+    .btn-refresh{font-size:0.7rem;padding:0.45rem 0.75rem;}
+
+    /* TABLES — make them scroll horizontally */
+    .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+    table{min-width:600px;}
+    th,td{padding:0.6rem 0.75rem;font-size:0.78rem;}
+
+    /* ADMIN BOOKING FORM — stack fields vertically */
+    #adminBookingForm [style*="grid-template-columns:1fr 1fr"],
+    #adminBlockForm [style*="grid-template-columns:1fr 1fr"]{
+      grid-template-columns:1fr !important;
+    }
+
+    /* MEMBER MODALS */
+    #memberModal > div, #addMemberModal > div{
+      width:95vw !important;max-width:95vw !important;padding:1.25rem !important;
+    }
+  }
+
+  @media(max-width:420px){
+    .stats-grid{grid-template-columns:repeat(2,1fr);}
+    .stat-val{font-size:1.5rem;}
+    th,td{padding:0.5rem 0.6rem;font-size:0.72rem;}
   }
 </style>
 </head>

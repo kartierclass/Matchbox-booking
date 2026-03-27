@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Match-Box</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=Space+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green:#4ADE80; --green-dark:#22C55E; --green-dim:#166534;
+    --black:#0a0a0a; --surface:#111111; --surface2:#1a1a1a; --surface3:#222222;
+    --border:#2a2a2a; --text:#f0f0f0; --muted:#888; --danger:#ef4444; --warning:#f59e0b;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--black);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;}
+
+  /* SIDEBAR */
+  .sidebar{width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
+  .sb-logo{padding:1.5rem;font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:0.08em;border-bottom:1px solid var(--border);}
+  .sb-logo span{color:var(--green);}
+  .sb-tag{font-size:0.65rem;font-family:'Space Mono',monospace;color:var(--muted);margin-top:2px;}
+  .sb-nav{padding:1rem 0;flex:1;}
+  .sb-item{display:flex;align-items:center;gap:10px;padding:0.65rem 1.5rem;cursor:pointer;transition:all 0.2s;font-size:0.9rem;color:var(--muted);border-left:2px solid transparent;}
+  .sb-item:hover{color:var(--text);background:var(--surface2);}
+  .sb-item.active{color:var(--green);border-left-color:var(--green);background:rgba(74,222,128,0.05);}
+  .sb-icon{font-size:1rem;width:20px;text-align:center;}
+  .sb-footer{padding:1rem 1.5rem;border-top:1px solid var(--border);font-size:0.75rem;color:var(--muted);font-family:'Space Mono',monospace;}
+
+  /* MAIN */
+  .content{flex:1;overflow-y:auto;padding:2rem;}
+  .page{display:none;}
+  .page.active{display:block;}
+
+  /* STATS */
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:1rem;margin-bottom:2rem;}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem;}
+  .stat-label{font-size:0.7rem;font-family:'Space Mono',monospace;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.5rem;}
+  .stat-val{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:0.02em;line-height:1;}
+  .stat-val.green{color:var(--green);}
+  .stat-sub{font-size:0.72rem;color:var(--muted);margin-top:4px;}
+
+  /* PAGE HEADER */
+  .page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;}
+  .page-title{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:0.04em;}
+
+  /* FILTERS */
+  .filters{display:flex;gap:0.75rem;margin-bottom:1.5rem;flex-wrap:wrap;}
+  .filter-select{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.75rem;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;cursor:pointer;appearance:none;}
+  .filter-select:focus{border-color:var(--green);}
+  .btn-refresh{background:transparent;border:1px solid var(--border);border-radius:6px;padding:0.5rem 1rem;color:var(--muted);font-family:'Space Mono',monospace;font-size:0.75rem;cursor:pointer;transition:all 0.2s;letter-spacing:0.05em;}
+  .btn-refresh:hover{border-color:var(--green);color:var(--green);}
+
+  /* TABLE */
+  .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+  table{width:100%;border-collapse:collapse;}
+  thead{background:var(--surface2);}
+  th{padding:0.75rem 1rem;text-align:left;font-size:0.7rem;font-family:'Space Mono',monospace;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;border-bottom:1px solid var(--border);}
+  td{padding:0.75rem 1rem;font-size:0.85rem;border-bottom:1px solid var(--border);}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:rgba(255,255,255,0.02);}
+
+  .ref-code{font-family:'Space Mono',monospace;font-size:0.75rem;color:var(--green);}
+  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:0.7rem;font-family:'Space Mono',monospace;letter-spacing:0.05em;}
+  .badge.confirmed{background:rgba(74,222,128,0.1);color:var(--green);border:1px solid var(--green-dim);}
+  .badge.cancelled{background:rgba(239,68,68,0.1);color:var(--danger);border:1px solid rgba(239,68,68,0.3);}
+  .badge.completed{background:rgba(148,163,184,0.1);color:#94a3b8;border:1px solid rgba(148,163,184,0.2);}
+
+  .btn-cancel{background:transparent;border:1px solid rgba(239,68,68,0.3);color:var(--danger);border-radius:4px;padding:3px 10px;font-size:0.75rem;cursor:pointer;transition:all 0.2s;font-family:'DM Sans',sans-serif;}
+  .btn-cancel:hover{background:rgba(239,68,68,0.1);}
+  .btn-cancel:disabled{opacity:0.3;cursor:not-allowed;}
+
+  .empty-table{padding:3rem;text-align:center;color:var(--muted);font-size:0.85rem;}
+
+  /* LOADING */
+  .loading-row td{text-align:center;color:var(--muted);padding:2rem;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin 0.6s linear infinite;}
+
+  /* TOAST */
+  .toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(100px);padding:0.75rem 1.5rem;border-radius:8px;font-size:0.85rem;z-index:300;transition:transform 0.3s;}
+  .toast.show{transform:translateX(-50%) translateY(0);}
+  .toast.success{background:var(--green);color:#000;}
+  .toast.error{background:var(--danger);color:white;}
+
+  @media(max-width:768px){
+    body{flex-direction:column;}
+    .sidebar{width:100%;height:auto;position:relative;}
+    .sb-nav{display:flex;padding:0;overflow-x:auto;}
+    .sb-item{border-left:none;border-bottom:2px solid transparent;white-space:nowrap;padding:0.75rem 1rem;}
+    .sb-item.active{border-bottom-color:var(--green);border-left:none;}
+    .sb-footer{display:none;}
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen" style="position:fixed;inset:0;background:var(--black);z-index:999;display:flex;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2.5rem;width:90%;max-width:360px;text-align:center;">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:0.08em;margin-bottom:0.25rem;">MATCH<span style="color:var(--green)">-</span>BOX</div>
+    <div style="font-size:0.75rem;font-family:'Space Mono',monospace;color:var(--muted);margin-bottom:2rem;letter-spacing:0.1em;">ADMIN PANEL</div>
+    <input type="password" id="adminPassword" placeholder="Enter password"
+      style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0.85rem 1rem;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;text-align:center;letter-spacing:0.15em;"
+      onkeydown="if(event.key==='Enter') checkPassword()">
+    <div id="loginError" style="color:var(--danger);font-size:0.8rem;margin-bottom:0.75rem;min-height:1.2rem;font-family:'Space Mono',monospace;"></div>
+    <button onclick="checkPassword()"
+      style="width:100%;background:var(--green);color:#000;border:none;border-radius:8px;padding:0.9rem;font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:0.1em;cursor:pointer;">
+      Enter
+    </button>
+  </div>
+</div>
+
+<!-- ADMIN APP (hidden until logged in) -->
+<div id="adminApp" style="display:none;display:none;width:100%;flex:1;">
+<div class="sidebar">
+  <div class="sb-logo">
+    MATCH<span>-</span>BOX
+    <div class="sb-tag">Admin Panel</div>
+  </div>
+  <nav class="sb-nav">
+    <div class="sb-item active" onclick="showPage('dashboard',this)">
+      <span class="sb-icon">◈</span> Dashboard
+    </div>
+    <div class="sb-item" onclick="showPage('bookings',this)">
+      <span class="sb-icon">◷</span> Bookings
+    </div>
+    <div class="sb-item" onclick="showPage('today',this)">
+      <span class="sb-icon">◉</span> Today
+    </div>
+    <div class="sb-item" onclick="showPage('customers',this)">
+      <span class="sb-icon">◈</span> Customers
+    </div>
+    <div class="sb-item" onclick="showPage('members',this)">
+      <span class="sb-icon">◉</span> Members
+    </div>
+    <div class="sb-item" onclick="showPage('manage',this)">
+      <span class="sb-icon">◈</span> Manage Slots
+    </div>
+  </nav>
+  <div class="sb-footer">
+    Match-Box Admin v1.0<br>
+    <a href="../frontend/index.html" style="color:var(--green);text-decoration:none;">→ Booking page</a>
+  </div>
+</div>
+
+<div class="content">
+
+  <!-- DASHBOARD -->
+  <div class="page active" id="page-dashboard">
+    <div class="page-header">
+      <div class="page-title">Dashboard</div>
+      <button class="btn-refresh" onclick="loadStats();loadRecent()">↻ Refresh</button>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total bookings</div>
+        <div class="stat-val green" id="statTotal">—</div>
+        <div class="stat-sub">All time confirmed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Today's bookings</div>
+        <div class="stat-val" id="statToday">—</div>
+        <div class="stat-sub">Confirmed today</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total revenue</div>
+        <div class="stat-val green" id="statRevenue">—</div>
+        <div class="stat-sub">From confirmed bookings</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active centres</div>
+        <div class="stat-val" id="statTurfs">—</div>
+        <div class="stat-sub">Locations online</div>
+      </div>
+    </div>
+
+    <div class="page-header" style="margin-top:1rem;">
+      <div class="page-title" style="font-size:1.3rem;">Recent bookings</div>
+    </div>
+    <div class="filters">
+      <select class="filter-select" id="dashFilterTurf" onchange="loadRecent()">
+        <option value="">All centres</option>
+      </select>
+      <select class="filter-select" id="dashFilterSport" onchange="loadRecent()">
+        <option value="">All sports</option>
+        <option value="Football">Football</option>
+        <option value="Pickleball">Pickleball</option>
+        <option value="Box Cricket">Box Cricket</option>
+      </select>
+      <select class="filter-select" id="dashFilterStatus" onchange="loadRecent()">
+        <option value="">All statuses</option>
+        <option value="confirmed">Confirmed</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Ref</th><th>Customer</th><th>Sport</th><th>Centre</th><th>Date</th><th>Time</th><th>Amount</th><th>Status</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="recentBookings">
+          <tr class="loading-row"><td colspan="9"><span class="spinner"></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ALL BOOKINGS -->
+  <div class="page" id="page-bookings">
+    <div class="page-header">
+      <div class="page-title">All Bookings</div>
+      <button class="btn-refresh" onclick="loadBookings()">↻ Refresh</button>
+    </div>
+    <div class="filters">
+      <select class="filter-select" id="filterTurf" onchange="loadBookings()">
+        <option value="">All centres</option>
+      </select>
+      <select class="filter-select" id="filterSport" onchange="loadBookings()">
+        <option value="">All sports</option>
+        <option value="Football">Football</option>
+        <option value="Pickleball">Pickleball</option>
+        <option value="Box Cricket">Box Cricket</option>
+      </select>
+      <select class="filter-select" id="filterStatus" onchange="loadBookings()">
+        <option value="">All statuses</option>
+        <option value="confirmed">Confirmed</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+      <input type="date" class="filter-select" id="filterDate" onchange="loadBookings()" style="cursor:pointer;">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Ref</th><th>Customer</th><th>WhatsApp</th><th>Sport</th><th>Centre</th><th>Date</th><th>Time</th><th>Players</th><th>Amount</th><th>Status</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="allBookings">
+          <tr class="loading-row"><td colspan="11"><span class="spinner"></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TODAY -->
+  <div class="page" id="page-today">
+    <div class="page-header">
+      <div class="page-title">Today's Schedule</div>
+      <button class="btn-refresh" onclick="loadToday()">↻ Refresh</button>
+    </div>
+    <div class="filters">
+      <select class="filter-select" id="todayFilterTurf" onchange="loadToday()">
+        <option value="">All centres</option>
+      </select>
+      <select class="filter-select" id="todayFilterSport" onchange="loadToday()">
+        <option value="">All sports</option>
+        <option value="Football">Football</option>
+        <option value="Pickleball">Pickleball</option>
+        <option value="Box Cricket">Box Cricket</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Ref</th><th>Customer</th><th>WhatsApp</th><th>Sport</th><th>Centre</th><th>Time</th><th>Players</th><th>Status</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="todayBookings">
+          <tr class="loading-row"><td colspan="9"><span class="spinner"></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- CUSTOMERS -->
+  <div class="page" id="page-customers">
+    <div class="page-header">
+      <div class="page-title">Customers</div>
+      <button class="btn-refresh" onclick="loadCustomers()">↻ Refresh</button>
+    </div>
+    <div class="filters">
+      <input type="text" class="filter-select" id="customerSearch" placeholder="Search name or phone..." oninput="filterCustomers()" style="min-width:220px;">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th><th>WhatsApp</th><th>Total bookings</th><th>First booked</th><th>Last booked</th>
+          </tr>
+        </thead>
+        <tbody id="customersList">
+          <tr class="loading-row"><td colspan="5"><span class="spinner"></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- MEMBERS -->
+  <div class="page" id="page-members">
+    <div class="page-header">
+      <div class="page-title">Members</div>
+      <div style="display:flex;gap:0.5rem;">
+        <button class="btn-refresh" onclick="loadMembers()">↻ Refresh</button>
+        <button class="btn-refresh" style="background:var(--green);color:#000;border:none;font-family:'Bebas Neue',sans-serif;font-size:0.9rem;letter-spacing:0.08em;padding:0.5rem 1rem;border-radius:6px;cursor:pointer;" onclick="showAddMember()">+ Add Member</button>
+      </div>
+    </div>
+    <div class="table-wrap" style="margin-bottom:1.5rem;">
+      <table>
+        <thead>
+          <tr><th>Name</th><th>Phone</th><th>Invite code</th><th>Balance</th><th>Total paid</th><th>Bookings</th><th>Last booking</th><th></th></tr>
+        </thead>
+        <tbody id="membersList">
+          <tr class="loading-row"><td colspan="8"><span class="spinner"></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- MEMBER HISTORY MODAL -->
+  <div id="memberModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2rem;max-width:700px;width:95%;max-height:85vh;overflow-y:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+        <div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;" id="modalMemberName">Member</div>
+          <div style="font-size:0.75rem;font-family:'Space Mono',monospace;color:var(--muted);" id="modalMemberPhone"></div>
+        </div>
+        <button onclick="closeMemberModal()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:6px 12px;cursor:pointer;font-family:'DM Sans',sans-serif;">Close</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+        <div style="background:var(--surface2);border-radius:8px;padding:1rem;">
+          <div style="font-size:0.65rem;font-family:'Space Mono',monospace;color:var(--muted);margin-bottom:4px;text-transform:uppercase;">Current balance</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;" id="modalBalance">₹0</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:1rem;">
+          <div style="font-size:0.65rem;font-family:'Space Mono',monospace;color:var(--muted);margin-bottom:4px;text-transform:uppercase;">Adjust balance</div>
+          <div style="display:flex;gap:6px;">
+            <input type="number" id="adjustAmount" placeholder="e.g. 500 or -200" style="flex:1;background:var(--surface3);border:1px solid var(--border);border-radius:6px;padding:0.5rem;color:var(--text);font-size:0.85rem;outline:none;">
+            <button onclick="adjustBalance()" style="background:var(--green);color:#000;border:none;border-radius:6px;padding:0.5rem 0.75rem;font-family:'Bebas Neue',sans-serif;font-size:0.9rem;cursor:pointer;white-space:nowrap;">Apply</button>
+          </div>
+          <input type="text" id="adjustNote" placeholder="Note (optional)" style="width:100%;margin-top:6px;background:var(--surface3);border:1px solid var(--border);border-radius:6px;padding:0.5rem;color:var(--text);font-size:0.82rem;outline:none;">
+        </div>
+      </div>
+
+      <div style="font-size:0.75rem;font-family:'Space Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Recent transactions</div>
+      <div id="modalTxList" style="background:var(--surface2);border-radius:8px;overflow:hidden;margin-bottom:1.5rem;"></div>
+
+      <div style="font-size:0.75rem;font-family:'Space Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Booking history</div>
+      <div id="modalBookingList" style="background:var(--surface2);border-radius:8px;overflow:hidden;"></div>
+    </div>
+  </div>
+
+  <!-- ADD MEMBER MODAL -->
+  <div id="addMemberModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2rem;max-width:400px;width:95%;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;margin-bottom:1.5rem;">Add Member</div>
+      <div style="display:flex;flex-direction:column;gap:0.75rem;margin-bottom:1.5rem;">
+        <input type="text" id="newName" placeholder="Full name" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0.75rem;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.9rem;outline:none;">
+        <input type="tel" id="newPhone" placeholder="Phone number" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0.75rem;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.9rem;outline:none;">
+        <input type="text" id="newCode" placeholder="Invite code (e.g. RAHUL2025)" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0.75rem;color:var(--text);font-family:'Space Mono',monospace;font-size:0.85rem;outline:none;text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()">
+        <input type="number" id="newBalance" placeholder="Initial balance (optional)" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0.75rem;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.9rem;outline:none;">
+      </div>
+      <div id="addMemberError" style="color:var(--danger);font-size:0.78rem;font-family:'Space Mono',monospace;min-height:1rem;margin-bottom:0.75rem;"></div>
+      <div style="display:flex;gap:0.75rem;">
+        <button onclick="closeAddMember()" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:0.75rem;cursor:pointer;font-family:'DM Sans',sans-serif;">Cancel</button>
+        <button onclick="createMember()" style="flex:1;background:var(--green);color:#000;border:none;border-radius:8px;padding:0.75rem;font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:0.08em;cursor:pointer;">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MANAGE SLOTS -->
+  <div class="page" id="page-manage">
+    <div class="page-header">
+      <div class="page-title">Manage Slots</div>
+    </div>
+
+    <!-- FILTERS -->
+    <div class="filters" style="margin-bottom:1.5rem;">
+      <select class="filter-select" id="mgTurf" onchange="loadManageSlots()">
+        <option value="">Select centre</option>
+      </select>
+      <select class="filter-select" id="mgSport" onchange="loadManageSlots()">
+        <option value="">Select sport</option>
+        <option value="Football">Football</option>
+        <option value="Pickleball">Pickleball</option>
+        <option value="Box Cricket">Box Cricket</option>
+      </select>
+      <select class="filter-select" id="mgCourt" onchange="loadManageSlots()">
+        <option value="Full">Full court</option>
+        <option value="Half">Half court</option>
+      </select>
+      <input type="date" class="filter-select" id="mgDate" onchange="loadManageSlots()" style="cursor:pointer;">
+    </div>
+
+    <!-- SLOT GRID -->
+    <div id="mgSlotGrid" style="margin-bottom:2rem;">
+      <div class="empty-table" style="padding:2rem;border:1px dashed var(--border);border-radius:8px;text-align:center;color:var(--muted);">Select a centre, sport and date to manage slots.</div>
+    </div>
+
+    <!-- ADMIN BOOKING FORM -->
+    <div id="adminBookingForm" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:0.04em;margin-bottom:1rem;padding-bottom:0.75rem;border-bottom:1px solid var(--border);" id="adminFormTitle">Book Slot</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+        <div>
+          <label style="display:block;font-size:0.7rem;font-family:'Space Mono',monospace;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.5rem;">Customer name</label>
+          <input type="text" id="adminName" placeholder="e.g. Rahul Sharma" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:0.75rem;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.9rem;outline:none;">
+        </div>
+        <div>
+          <label style="display:block;font-size:0.7rem;font-family:'Space Mono',monospace;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.5rem;">Phone number</label>
+          <input type="tel" id="adminPhone" placeholder="+91 98765 43210" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:0.75rem;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.9rem;outline:none;">
+        </div>
+      </div>
+      <div id="adminFormError" style="color:var(--danger);font-size:0.78rem;font-family:'Space Mono',monospace;min-height:1rem;margin-bottom:0.75rem;"></div>
+      <div style="display:flex;gap:0.75rem;">
+        <button onclick="cancelAdminForm()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:0.75rem 1.5rem;cursor:pointer;font-family:'DM Sans',sans-serif;">Cancel</button>
+        <button onclick="submitAdminBooking()" style="background:var(--green);color:#000;border:none;border-radius:8px;padding:0.75rem 1.5rem;font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:0.08em;cursor:pointer;">Confirm Booking</button>
+      </div>
+    </div>
+
+    <!-- BLOCK FORM -->
+    <div id="adminBlockForm" style="display:none;background:var(--surface);border:1px solid rgba(239,68,68,0.3);border-radius:12px;padding:1.5rem;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:0.04em;margin-bottom:1rem;padding-bottom:0.75rem;border-bottom:1px solid var(--border);color:var(--danger);">Block Slots</div>
+      <div style="margin-bottom:1rem;">
+        <label style="display:block;font-size:0.7rem;font-family:'Space Mono',monospace;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.5rem;">Reason (optional)</label>
+        <input type="text" id="blockReason" placeholder="e.g. Maintenance, Rainfall, Private event..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:0.75rem;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.9rem;outline:none;">
+      </div>
+      <div id="adminBlockError" style="color:var(--danger);font-size:0.78rem;font-family:'Space Mono',monospace;min-height:1rem;margin-bottom:0.75rem;"></div>
+      <div style="display:flex;gap:0.75rem;">
+        <button onclick="cancelAdminForm()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:0.75rem 1.5rem;cursor:pointer;font-family:'DM Sans',sans-serif;">Cancel</button>
+        <button onclick="submitBlock()" style="background:var(--danger);color:white;border:none;border-radius:8px;padding:0.75rem 1.5rem;font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:0.08em;cursor:pointer;">Block Selected Slots</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div><!-- end adminApp -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const ADMIN_PASSWORD = 'matchbox2026'; // ← Change this to your password
+
+  function checkPassword() {
+    const input = document.getElementById('adminPassword').value;
+    const err = document.getElementById('loginError');
+    if (input === ADMIN_PASSWORD) {
+      document.getElementById('loginScreen').style.display = 'none';
+      const app = document.getElementById('adminApp');
+      app.style.display = 'flex';
+      app.style.width = '100%';
+      app.style.height = '100vh';
+      app.style.overflow = 'hidden';
+      sessionStorage.setItem('mbAdmin', '1');
+      loadStats(); loadRecent(); loadTurfFilter();
+    } else {
+      err.textContent = 'Incorrect password';
+      document.getElementById('adminPassword').value = '';
+      document.getElementById('adminPassword').focus();
+    }
+  }
+
+  // Auto-login if session exists
+  if (sessionStorage.getItem('mbAdmin') === '1') {
+    document.getElementById('loginScreen').style.display = 'none';
+    const app = document.getElementById('adminApp');
+    app.style.display = 'flex';
+    app.style.width = '100%';
+    app.style.height = '100vh';
+    app.style.overflow = 'hidden';
+  }
+
+
+  const API = 'https://matchbox-booking-production.up.railway.app'; // ← Replace with your Railway URL
+
+  function showPage(name, el) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.sb-item').forEach(i => i.classList.remove('active'));
+    document.getElementById('page-' + name).classList.add('active');
+    el.classList.add('active');
+    if (name === 'dashboard') { loadStats(); loadRecent(); }
+    if (name === 'bookings') loadBookings();
+    if (name === 'today') loadToday();
+    if (name === 'customers') loadCustomers();
+    if (name === 'members') loadMembers();
+    if (name === 'manage') initManage();
+  }
+
+  async function loadStats() {
+    try {
+      const res = await fetch(`${API}/api/stats`);
+      const d = await res.json();
+      document.getElementById('statTotal').textContent = d.total_bookings;
+      document.getElementById('statToday').textContent = d.today_bookings;
+      document.getElementById('statRevenue').textContent = `₹${Number(d.total_revenue).toLocaleString('en-IN')}`;
+      document.getElementById('statTurfs').textContent = d.active_turfs;
+    } catch { toast('Could not load stats', 'error'); }
+  }
+
+  async function loadTurfFilter() {
+    try {
+      const res = await fetch(`${API}/api/turfs`);
+      const turfs = await res.json();
+      ['filterTurf', 'dashFilterTurf', 'todayFilterTurf', 'mgTurf'].forEach(selId => {
+        const sel = document.getElementById(selId);
+        if (!sel) return;
+        turfs.forEach(t => {
+          const o = document.createElement('option');
+          o.value = t.id; o.textContent = t.location;
+          sel.appendChild(o);
+        });
+      });
+    } catch {}
+  }
+
+  function fmtSlotTime(start, end) {
+    function fmt(t) {
+      if (!t) return '';
+      // Handle pre-formatted "07:00 AM" from TO_CHAR
+      const preMatch = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      if (preMatch) {
+        let h = parseInt(preMatch[1]);
+        const m = parseInt(preMatch[2]);
+        const ampm = preMatch[3].toUpperCase();
+        const hour = h % 12 || 12;
+        return m === 0 ? `${hour}${ampm}` : `${hour}:${preMatch[2]}${ampm}`;
+      }
+      // Handle raw "07:00:00"
+      const parts = t.split(':');
+      const h = parseInt(parts[0]);
+      const m = parseInt(parts[1]);
+      if (isNaN(h) || isNaN(m)) return t;
+      const ampm = h < 12 ? 'AM' : 'PM';
+      const hour = h % 12 || 12;
+      return m === 0 ? `${hour}${ampm}` : `${hour}:${parts[1]}${ampm}`;
+    }
+    return `${fmt(start)}–${fmt(end)}`;
+  }
+
+  function fmtDate(d) {
+    if (!d) return '—';
+    const dt = new Date(d);
+    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${days[dt.getUTCDay()]} ${dt.getUTCDate()} ${months[dt.getUTCMonth()]}`;
+  }
+
+  function bookingRows(bookings, cols) {
+    if (!bookings.length) return `<tr><td colspan="${cols}" class="empty-table">No bookings found.</td></tr>`;
+    return bookings.map(b => `
+      <tr>
+        <td><span class="ref-code">${b.ref_code}</span></td>
+        <td>${b.customer_name}</td>
+        ${cols > 9 ? `<td style="font-family:'Space Mono',monospace;font-size:0.75rem;">${b.customer_phone}</td>` : ''}
+        <td>${b.sport}${b.court_type && b.court_type !== 'Full' ? ' · ' + b.court_type : b.court_type === 'Full' ? ' · Full' : ''}</td>
+        <td>${b.location}</td>
+        <td style="font-family:'Space Mono',monospace;font-size:0.75rem;">${fmtDate(b.booking_date)}</td>
+        <td style="font-family:'Space Mono',monospace;font-size:0.75rem;">${fmtSlotTime(b.start_time, b.end_time)}</td>
+        ${cols > 9 ? `<td>${b.player_count}</td>` : ''}
+        <td style="color:var(--green);">₹${Number(b.total_amount).toLocaleString('en-IN')}</td>
+        <td><span class="badge ${b.status}">${b.status}</span></td>
+        <td>
+          ${b.status === 'confirmed'
+            ? `<button class="btn-cancel" onclick="cancelBooking('${b.id}',this)">Cancel</button>`
+            : ''}
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  async function loadRecent() {
+    const tbody = document.getElementById('recentBookings');
+    tbody.innerHTML = '<tr class="loading-row"><td colspan="9"><span class="spinner"></span></td></tr>';
+    const turf = document.getElementById('dashFilterTurf')?.value || '';
+    const sport = document.getElementById('dashFilterSport')?.value || '';
+    const status = document.getElementById('dashFilterStatus')?.value || '';
+    let url = `${API}/api/bookings?`;
+    if (turf) url += `turf_id=${turf}&`;
+    if (status) url += `status=${status}&`;
+    try {
+      const res = await fetch(url);
+      let data = await res.json();
+      if (sport) data = data.filter(b => b.sport === sport);
+      tbody.innerHTML = bookingRows(data.slice(0,20), 9);
+    } catch { tbody.innerHTML = '<tr><td colspan="9" class="empty-table">Could not load bookings.</td></tr>'; }
+  }
+
+  async function loadBookings() {
+    const tbody = document.getElementById('allBookings');
+    tbody.innerHTML = '<tr class="loading-row"><td colspan="11"><span class="spinner"></span></td></tr>';
+    const turf = document.getElementById('filterTurf').value;
+    const sport = document.getElementById('filterSport').value;
+    const status = document.getElementById('filterStatus').value;
+    const date = document.getElementById('filterDate').value;
+    let url = `${API}/api/bookings?`;
+    if (turf) url += `turf_id=${turf}&`;
+    if (status) url += `status=${status}&`;
+    if (date) url += `date=${date}&`;
+    try {
+      const res = await fetch(url);
+      let data = await res.json();
+      if (sport) data = data.filter(b => b.sport === sport);
+      tbody.innerHTML = bookingRows(data, 11);
+    } catch { tbody.innerHTML = '<tr><td colspan="11" class="empty-table">Could not load bookings.</td></tr>'; }
+  }
+
+  async function loadToday() {
+    const tbody = document.getElementById('todayBookings');
+    tbody.innerHTML = '<tr class="loading-row"><td colspan="9"><span class="spinner"></span></td></tr>';
+    const today = new Date().toISOString().split('T')[0];
+    try {
+      const res = await fetch(`${API}/api/bookings?date=${today}`);
+      const data = await res.json();
+      tbody.innerHTML = bookingRows(data, 9);
+    } catch { tbody.innerHTML = '<tr><td colspan="9" class="empty-table">Could not load today\'s bookings.</td></tr>'; }
+  }
+
+  async function cancelBooking(id, btn) {
+    if (!confirm('Cancel this booking? All slots in this booking will be cancelled.')) return;
+    btn.disabled = true;
+    btn.textContent = '...';
+    try {
+      const res = await fetch(`${API}/api/bookings/${id}/cancel`, { method: 'PATCH' });
+      const data = await res.json();
+      if (!res.ok) { toast(data.error, 'error'); btn.disabled=false; btn.textContent='Cancel'; return; }
+      const slotMsg = data.cancelled_count > 1 ? ` (${data.cancelled_count} slots)` : '';
+      const refundMsg = data.refunded > 0 ? ` · ₹${data.refunded.toLocaleString('en-IN')} refunded to wallet` : '';
+      toast(`Booking ${data.ref_code} cancelled${slotMsg}${refundMsg}`, 'success');
+      setTimeout(() => { loadRecent(); loadBookings(); loadToday(); loadStats(); }, 500);
+    } catch { toast('Could not cancel booking', 'error'); btn.disabled=false; btn.textContent='Cancel'; }
+  }
+
+  function toast(msg, type='success') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = `toast ${type} show`;
+    setTimeout(() => el.classList.remove('show'), 3500);
+  }
+
+  let allCustomers = [];
+
+  async function loadCustomers() {
+    const tbody = document.getElementById('customersList');
+    tbody.innerHTML = '<tr class="loading-row"><td colspan="5"><span class="spinner"></span></td></tr>';
+    try {
+      const res = await fetch(`${API}/api/customers`);
+      allCustomers = await res.json();
+      renderCustomers(allCustomers);
+    } catch { tbody.innerHTML = '<tr><td colspan="5" class="empty-table">Could not load customers.</td></tr>'; }
+  }
+
+  function renderCustomers(customers) {
+    const tbody = document.getElementById('customersList');
+    if (!customers.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-table">No customers found.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = customers.map(c => `
+      <tr>
+        <td style="font-weight:500">${c.name || '—'}</td>
+        <td style="font-family:'Space Mono',monospace;font-size:0.75rem;">${c.phone}</td>
+        <td><span style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--green);">${c.total_bookings}</span></td>
+        <td style="font-family:'Space Mono',monospace;font-size:0.75rem;">${fmtDate(c.created_at)}</td>
+        <td style="font-family:'Space Mono',monospace;font-size:0.75rem;">${c.last_booking ? fmtDate(c.last_booking) : '—'}</td>
+      </tr>
+    `).join('');
+  }
+
+  function filterCustomers() {
+    const q = document.getElementById('customerSearch').value.toLowerCase();
+    if (!q) { renderCustomers(allCustomers); return; }
+    renderCustomers(allCustomers.filter(c =>
+      c.name?.toLowerCase().includes(q) || c.phone?.includes(q)
+    ));
+  }
+
+  let currentModalMemberId = null;
+
+  async function loadMembers() {
+    const tbody = document.getElementById('membersList');
+    tbody.innerHTML = '<tr class="loading-row"><td colspan="8"><span class="spinner"></span></td></tr>';
+    try {
+      const res = await fetch(`${API}/api/members/admin/members`);
+      const data = await res.json();
+      if (!data.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty-table">No members yet.</td></tr>'; return; }
+      tbody.innerHTML = data.map(m => {
+        const bal = parseFloat(m.balance);
+        const balColor = bal < 0 ? 'var(--danger)' : bal > 0 ? 'var(--green)' : 'var(--muted)';
+        return `<tr>
+          <td style="font-weight:500">${m.name}</td>
+          <td style="font-family:'Space Mono',monospace;font-size:0.75rem;">${m.phone}</td>
+          <td><span style="font-family:'Space Mono',monospace;font-size:0.72rem;color:var(--green);background:rgba(74,222,128,0.08);border:1px solid var(--green-dim);padding:2px 8px;border-radius:4px;">${m.invite_code}</span></td>
+          <td style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:${balColor};">₹${Math.abs(bal).toLocaleString('en-IN')}${bal < 0 ? ' owed' : ''}</td>
+          <td>₹${parseFloat(m.total_topped_up||0).toLocaleString('en-IN')}</td>
+          <td>${m.total_bookings}</td>
+          <td style="font-size:0.78rem;color:var(--muted);">${m.last_booking ? fmtDate(m.last_booking) : '—'}</td>
+          <td><button onclick="openMemberModal('${m.id}')" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;padding:3px 10px;font-size:0.75rem;cursor:pointer;">View</button></td>
+        </tr>`;
+      }).join('');
+    } catch { tbody.innerHTML = '<tr><td colspan="8" class="empty-table">Could not load members.</td></tr>'; }
+  }
+
+  async function openMemberModal(id) {
+    currentModalMemberId = id;
+    document.getElementById('memberModal').style.display = 'flex';
+    try {
+      const res = await fetch(`${API}/api/members/admin/members/${id}/history`);
+      const data = await res.json();
+      document.getElementById('modalMemberName').textContent = data.member.name;
+      document.getElementById('modalMemberPhone').textContent = data.member.phone + ' · ' + data.member.invite_code;
+      const bal = parseFloat(data.member.balance);
+      const el = document.getElementById('modalBalance');
+      el.textContent = (bal < 0 ? '-' : '') + '₹' + Math.abs(bal).toLocaleString('en-IN');
+      el.style.color = bal < 0 ? 'var(--danger)' : bal > 0 ? 'var(--green)' : 'var(--muted)';
+
+      const txHtml = data.transactions.length ? data.transactions.map(t => `
+        <div style="display:flex;justify-content:space-between;padding:0.6rem 1rem;border-bottom:1px solid var(--border);font-size:0.82rem;">
+          <span style="color:var(--muted);font-size:0.72rem;">${fmtDate(t.created_at)}</span>
+          <span>${t.note || t.type}</span>
+          <span style="font-weight:500;color:${t.type==='topup'?'var(--green)':'var(--danger)'};">${t.type==='topup'?'+':'-'}₹${parseFloat(t.amount).toLocaleString('en-IN')}</span>
+        </div>`).join('') : '<div style="padding:1rem;text-align:center;color:var(--muted);font-size:0.82rem;">No transactions</div>';
+      document.getElementById('modalTxList').innerHTML = txHtml;
+
+      const bkHtml = data.bookings.length ? data.bookings.map(b => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:0.6rem 1rem;border-bottom:1px solid var(--border);font-size:0.82rem;">
+          <span style="font-family:'Space Mono',monospace;font-size:0.7rem;color:var(--green);">${b.ref_code}</span>
+          <span>${b.sport} · ${b.location}</span>
+          <span style="color:var(--muted);font-size:0.75rem;">${fmtDate(b.booking_date)}</span>
+          <span style="color:var(--danger);">-₹${parseFloat(b.total_amount).toLocaleString('en-IN')}</span>
+        </div>`).join('') : '<div style="padding:1rem;text-align:center;color:var(--muted);font-size:0.82rem;">No bookings</div>';
+      document.getElementById('modalBookingList').innerHTML = bkHtml;
+    } catch { toast('Could not load member history', 'error'); }
+  }
+
+  function closeMemberModal() {
+    document.getElementById('memberModal').style.display = 'none';
+    currentModalMemberId = null;
+    document.getElementById('adjustAmount').value = '';
+    document.getElementById('adjustNote').value = '';
+  }
+
+  async function adjustBalance() {
+    const amount = parseFloat(document.getElementById('adjustAmount').value);
+    const note = document.getElementById('adjustNote').value;
+    if (isNaN(amount) || amount === 0) { toast('Enter a valid amount', 'error'); return; }
+    try {
+      const res = await fetch(`${API}/api/members/admin/members/${currentModalMemberId}/adjust`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, note }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast(data.error, 'error'); return; }
+      toast(`Balance updated to ₹${parseFloat(data.member.balance).toLocaleString('en-IN')}`, 'success');
+      openMemberModal(currentModalMemberId);
+      loadMembers();
+    } catch { toast('Could not update balance', 'error'); }
+  }
+
+  function showAddMember() { document.getElementById('addMemberModal').style.display = 'flex'; }
+  function closeAddMember() {
+    document.getElementById('addMemberModal').style.display = 'none';
+    ['newName','newPhone','newCode','newBalance'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('addMemberError').textContent = '';
+  }
+
+  async function createMember() {
+    const name = document.getElementById('newName').value.trim();
+    const phone = document.getElementById('newPhone').value.trim();
+    const invite_code = document.getElementById('newCode').value.trim();
+    const initial_balance = document.getElementById('newBalance').value;
+    const errEl = document.getElementById('addMemberError');
+    if (!name || !phone || !invite_code) { errEl.textContent = 'Name, phone and invite code are required'; return; }
+    try {
+      const res = await fetch(`${API}/api/members/admin/members`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, phone, invite_code, initial_balance }),
+      });
+      const data = await res.json();
+      if (!res.ok) { errEl.textContent = data.error; return; }
+      toast(`Member ${name} created — code: ${data.member.invite_code}`, 'success');
+      closeAddMember();
+      loadMembers();
+    } catch { errEl.textContent = 'Could not create member'; }
+  }
+
+  // ── MANAGE SLOTS ──────────────────────────────────────
+  let mgSelectedSlots = [];
+  let mgMode = null; // 'book' or 'block'
+  let mgTurfId = null;
+
+  function initManage() {
+    // Populate turf filter
+    const sel = document.getElementById('mgTurf');
+    if (sel.options.length <= 1) {
+      fetch(`${API}/api/turfs`).then(r=>r.json()).then(turfs => {
+        turfs.forEach(t => {
+          const o = document.createElement('option');
+          o.value = t.id; o.textContent = t.location;
+          sel.appendChild(o);
+        });
+      });
+    }
+    // Set today as default date
+    const dateInput = document.getElementById('mgDate');
+    if (!dateInput.value) dateInput.value = new Date().toISOString().split('T')[0];
+  }
+
+  async function loadManageSlots() {
+    const turf_id = document.getElementById('mgTurf').value;
+    const sport = document.getElementById('mgSport').value;
+    const court = document.getElementById('mgCourt').value;
+    const date = document.getElementById('mgDate').value;
+    const grid = document.getElementById('mgSlotGrid');
+    mgTurfId = turf_id;
+    cancelAdminForm();
+    mgSelectedSlots = [];
+
+    if (!turf_id || !sport || !date) {
+      grid.innerHTML = '<div class="empty-table" style="padding:2rem;border:1px dashed var(--border);border-radius:8px;text-align:center;color:var(--muted);">Select a centre, sport and date.</div>';
+      return;
+    }
+
+    grid.innerHTML = '<div style="padding:1rem;color:var(--muted);font-size:0.85rem;">Loading slots...</div>';
+    try {
+      const res = await fetch(`${API}/api/slots?turf_id=${turf_id}&sport=${encodeURIComponent(sport)}&date=${date}&court_type=${court}`);
+      const slots = await res.json();
+      if (!slots.length) { grid.innerHTML = '<div style="padding:1rem;color:var(--muted);">No slots found.</div>'; return; }
+
+      grid.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:0.5rem;margin-bottom:1rem;" id="mgGrid"></div>' +
+        '<div style="display:flex;gap:0.75rem;flex-wrap:wrap;" id="mgActions"></div>';
+
+      const mgGrid = document.getElementById('mgGrid');
+      slots.forEach(sl => {
+        const div = document.createElement('div');
+        const isBooked = sl.status === 'booked';
+        const isBlocked = sl.status === 'blocked';
+        const isHeld = sl.status === 'held';
+        div.style.cssText = `border:1px solid ${isBlocked?'var(--danger)':isBooked?'var(--border)':'var(--border)'};border-radius:6px;padding:0.6rem 0.75rem;cursor:${isBooked||isHeld?'not-allowed':'pointer'};background:${isBlocked?'rgba(239,68,68,0.08)':isBooked?'var(--surface2)':'var(--surface)'};opacity:${isBooked||isHeld?'0.4':'1'};transition:all 0.15s;`;
+        div.innerHTML = `<span style="font-family:'Space Mono',monospace;font-size:0.72rem;display:block;margin-bottom:2px;">${sl.time}</span>
+          <span style="font-size:0.7rem;color:${isBlocked?'var(--danger)':isBooked?'var(--muted)':'var(--green)'};">${isBlocked?'Blocked':isBooked?'Booked':isHeld?'Held':'₹'+sl.price}</span>`;
+        div.dataset.slotId = sl.id;
+        div.dataset.status = sl.status;
+        div.dataset.time = sl.time;
+        div.dataset.price = sl.price;
+        if (!isBooked && !isHeld) {
+          div.onclick = () => toggleMgSlot(div, sl);
+        }
+        mgGrid.appendChild(div);
+      });
+
+      updateMgActions();
+    } catch { grid.innerHTML = '<div style="padding:1rem;color:var(--danger);">Could not load slots.</div>'; }
+  }
+
+  function toggleMgSlot(div, sl) {
+    const idx = mgSelectedSlots.findIndex(s => s.id === sl.id);
+    if (idx >= 0) {
+      mgSelectedSlots.splice(idx, 1);
+      div.style.borderColor = sl.status === 'blocked' ? 'var(--danger)' : 'var(--border)';
+      div.style.background = sl.status === 'blocked' ? 'rgba(239,68,68,0.08)' : 'var(--surface)';
+    } else {
+      mgSelectedSlots.push(sl);
+      div.style.borderColor = 'var(--green)';
+      div.style.background = 'rgba(74,222,128,0.08)';
+    }
+    updateMgActions();
+  }
+
+  function updateMgActions() {
+    const actions = document.getElementById('mgActions');
+    if (!actions) return;
+    const hasAvailable = mgSelectedSlots.some(s => s.status === 'available');
+    const hasBlocked = mgSelectedSlots.some(s => s.status === 'blocked');
+    const count = mgSelectedSlots.length;
+
+    if (count === 0) { actions.innerHTML = '<span style="font-size:0.8rem;color:var(--muted);font-family:Space Mono,monospace;">Click slots to select them</span>'; return; }
+
+    let html = `<span style="font-size:0.8rem;color:var(--muted);font-family:'Space Mono',monospace;align-self:center;">${count} slot${count>1?'s':''} selected</span>`;
+    if (hasAvailable) {
+      html += `<button onclick="showAdminBooking()" style="background:var(--green);color:#000;border:none;border-radius:6px;padding:0.5rem 1rem;font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.06em;cursor:pointer;">Book for Customer</button>`;
+      html += `<button onclick="showBlockForm()" style="background:none;border:1px solid var(--danger);color:var(--danger);border-radius:6px;padding:0.5rem 1rem;font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.06em;cursor:pointer;">Block Slots</button>`;
+    }
+    if (hasBlocked) {
+      html += `<button onclick="unblockSlots()" style="background:none;border:1px solid var(--green);color:var(--green);border-radius:6px;padding:0.5rem 1rem;font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.06em;cursor:pointer;">Unblock</button>`;
+    }
+    actions.innerHTML = html;
+  }
+
+  function showAdminBooking() {
+    mgMode = 'book';
+    document.getElementById('adminBookingForm').style.display = 'block';
+    document.getElementById('adminBlockForm').style.display = 'none';
+    const total = mgSelectedSlots.reduce((s,sl) => s+parseFloat(sl.price), 0);
+    document.getElementById('adminFormTitle').textContent = `Book ${mgSelectedSlots.length} slot${mgSelectedSlots.length>1?'s':''} · ₹${total.toLocaleString('en-IN')}`;
+  }
+
+  function showBlockForm() {
+    mgMode = 'block';
+    document.getElementById('adminBlockForm').style.display = 'block';
+    document.getElementById('adminBookingForm').style.display = 'none';
+  }
+
+  function cancelAdminForm() {
+    mgMode = null;
+    document.getElementById('adminBookingForm').style.display = 'none';
+    document.getElementById('adminBlockForm').style.display = 'none';
+    document.getElementById('adminFormError').textContent = '';
+    document.getElementById('adminBlockError').textContent = '';
+  }
+
+  async function submitAdminBooking() {
+    const name = document.getElementById('adminName').value.trim();
+    const phone = document.getElementById('adminPhone').value.trim();
+    const date = document.getElementById('mgDate').value;
+    const court = document.getElementById('mgCourt').value;
+    const errEl = document.getElementById('adminFormError');
+    if (!name || !phone) { errEl.textContent = 'Name and phone are required'; return; }
+
+    try {
+      const res = await fetch(`${API}/api/admin/booking`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slot_ids: mgSelectedSlots.map(s => s.id),
+          turf_id: mgTurfId, date, name, phone,
+          court_type: court,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { errEl.textContent = data.error; return; }
+      toast(`Booked! Ref: ${data.ref_code}`, 'success');
+      mgSelectedSlots = [];
+      cancelAdminForm();
+      loadManageSlots();
+      loadStats();
+    } catch { errEl.textContent = 'Could not create booking'; }
+  }
+
+  async function submitBlock() {
+    const date = document.getElementById('mgDate').value;
+    const reason = document.getElementById('blockReason').value;
+    const errEl = document.getElementById('adminBlockError');
+
+    try {
+      const res = await fetch(`${API}/api/admin/block`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slot_ids: mgSelectedSlots.map(s => s.id),
+          turf_id: mgTurfId, date, reason,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { errEl.textContent = data.error; return; }
+      toast(`${data.blocked_count} slot${data.blocked_count>1?'s':''} blocked`, 'success');
+      mgSelectedSlots = [];
+      cancelAdminForm();
+      loadManageSlots();
+    } catch { errEl.textContent = 'Could not block slots'; }
+  }
+
+  async function unblockSlots() {
+    const date = document.getElementById('mgDate').value;
+    const blocked = mgSelectedSlots.filter(s => s.status === 'blocked');
+    for (const sl of blocked) {
+      await fetch(`${API}/api/admin/block`, {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot_id: sl.id, date }),
+      });
+    }
+    toast(`${blocked.length} slot${blocked.length>1?'s':''} unblocked`, 'success');
+    mgSelectedSlots = [];
+    cancelAdminForm();
+    loadManageSlots();
+  }
+
+</script>
+</body>
+</html>

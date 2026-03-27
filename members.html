@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Members — Match-Box</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=Space+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green:#4ADE80; --green-dark:#22C55E; --green-dim:#166534;
+    --black:#0a0a0a; --surface:#111111; --surface2:#1a1a1a; --surface3:#222222;
+    --border:#2a2a2a; --text:#f0f0f0; --muted:#888; --danger:#ef4444;
+    --warning:#f59e0b; --amber:#EF9F27;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--black); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; }
+
+  header {
+    position:sticky; top:0; z-index:100;
+    background:rgba(10,10,10,0.92); backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--border);
+    padding:0 2rem; display:flex; align-items:center; justify-content:space-between; height:64px;
+  }
+  .logo { font-family:'Bebas Neue',sans-serif; font-size:1.6rem; letter-spacing:0.08em; }
+  .logo span { color:var(--green); }
+  .header-right { display:flex; align-items:center; gap:1rem; }
+  .member-tag { font-size:0.72rem; font-family:'Space Mono',monospace; color:var(--green); background:rgba(74,222,128,0.1); border:1px solid var(--green-dim); padding:4px 10px; border-radius:20px; display:none; }
+  .btn-logout { font-size:0.75rem; color:var(--muted); font-family:'Space Mono',monospace; cursor:pointer; background:none; border:none; transition:color 0.2s; display:none; }
+  .btn-logout:hover { color:var(--danger); }
+  .back-link { font-size:0.8rem; color:var(--muted); text-decoration:none; font-family:'Space Mono',monospace; transition:color 0.2s; }
+  .back-link:hover { color:var(--green); }
+
+  /* LOGIN SCREEN */
+  #loginScreen {
+    min-height:calc(100vh - 64px); display:flex; align-items:center; justify-content:center; padding:2rem;
+  }
+  .login-box {
+    background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding:2.5rem; width:100%; max-width:400px; text-align:center;
+  }
+  .login-icon { font-size:2.5rem; margin-bottom:1rem; }
+  .login-title { font-family:'Bebas Neue',sans-serif; font-size:2rem; letter-spacing:0.04em; margin-bottom:0.4rem; }
+  .login-sub { font-size:0.85rem; color:var(--muted); margin-bottom:2rem; line-height:1.5; }
+  .login-input {
+    width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+    padding:1rem; color:var(--text); font-family:'Space Mono',monospace; font-size:1rem;
+    text-align:center; letter-spacing:0.2em; text-transform:uppercase; outline:none;
+    margin-bottom:0.75rem; transition:border-color 0.2s;
+  }
+  .login-input:focus { border-color:var(--green); }
+  .login-input.error { border-color:var(--danger); }
+  .login-error { color:var(--danger); font-size:0.78rem; font-family:'Space Mono',monospace; min-height:1.2rem; margin-bottom:0.75rem; }
+  .btn-login {
+    width:100%; background:var(--green); color:#000; border:none; border-radius:8px;
+    padding:1rem; font-family:'Bebas Neue',sans-serif; font-size:1.2rem; letter-spacing:0.1em;
+    cursor:pointer; transition:background 0.2s;
+  }
+  .btn-login:hover { background:var(--green-dark); }
+  .btn-login:disabled { background:var(--surface3); color:var(--muted); cursor:not-allowed; }
+  .login-note { font-size:0.72rem; color:var(--muted); margin-top:1.25rem; line-height:1.5; }
+
+  /* DASHBOARD */
+  #dashboard { display:none; max-width:900px; margin:0 auto; padding:2rem; }
+
+  /* BALANCE CARD */
+  .balance-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding:2rem; margin-bottom:1.5rem; position:relative; overflow:hidden;
+  }
+  .balance-card::before {
+    content:''; position:absolute; top:-40px; right:-40px;
+    width:160px; height:160px; border-radius:50%;
+    background:rgba(74,222,128,0.04); border:1px solid rgba(74,222,128,0.08);
+  }
+  .balance-label { font-size:0.7rem; font-family:'Space Mono',monospace; color:var(--muted); letter-spacing:0.12em; text-transform:uppercase; margin-bottom:0.5rem; }
+  .balance-amount { font-family:'Bebas Neue',sans-serif; font-size:3.5rem; line-height:1; letter-spacing:0.02em; }
+  .balance-amount.positive { color:var(--green); }
+  .balance-amount.negative { color:var(--danger); }
+  .balance-amount.zero { color:var(--muted); }
+  .balance-meta { margin-top:0.5rem; font-size:0.8rem; color:var(--muted); }
+  .owed-badge {
+    display:inline-block; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3);
+    color:var(--danger); font-size:0.75rem; font-family:'Space Mono',monospace;
+    padding:4px 10px; border-radius:20px; margin-top:0.5rem;
+  }
+
+  /* STATS ROW */
+  .stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; margin-bottom:1.5rem; }
+  .stat-mini { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1rem; }
+  .stat-mini-label { font-size:0.65rem; font-family:'Space Mono',monospace; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; margin-bottom:0.4rem; }
+  .stat-mini-val { font-family:'Bebas Neue',sans-serif; font-size:1.6rem; letter-spacing:0.02em; }
+
+  /* TOPUP SECTION */
+  .topup-card {
+    background:var(--surface); border:1px solid var(--green-dim); border-radius:12px;
+    padding:1.25rem 1.5rem; margin-bottom:1.5rem;
+    display:flex; align-items:center; justify-content:space-between; gap:1rem;
+  }
+  .topup-card p { font-size:0.85rem; color:var(--muted); line-height:1.5; }
+  .topup-card strong { color:var(--text); font-weight:500; }
+  .btn-topup {
+    flex-shrink:0; background:var(--green); color:#000; border:none; border-radius:8px;
+    padding:0.65rem 1.25rem; font-family:'Bebas Neue',sans-serif; font-size:1rem;
+    letter-spacing:0.08em; cursor:pointer; transition:background 0.2s; white-space:nowrap;
+  }
+  .btn-topup:hover { background:var(--green-dark); }
+
+  /* TABS */
+  .tabs { display:flex; gap:0; margin-bottom:1.5rem; border-bottom:1px solid var(--border); }
+  .tab {
+    padding:0.65rem 1.25rem; font-size:0.82rem; font-family:'Space Mono',monospace;
+    color:var(--muted); cursor:pointer; border-bottom:2px solid transparent;
+    transition:all 0.2s; letter-spacing:0.05em; margin-bottom:-1px;
+  }
+  .tab:hover { color:var(--text); }
+  .tab.active { color:var(--green); border-bottom-color:var(--green); }
+
+  /* TABLE */
+  .table-wrap { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  table { width:100%; border-collapse:collapse; }
+  thead { background:var(--surface2); }
+  th { padding:0.65rem 1rem; text-align:left; font-size:0.65rem; font-family:'Space Mono',monospace; color:var(--muted); letter-spacing:0.08em; text-transform:uppercase; border-bottom:1px solid var(--border); }
+  td { padding:0.75rem 1rem; font-size:0.83rem; border-bottom:1px solid var(--border); }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:rgba(255,255,255,0.02); }
+  .empty-table { padding:2.5rem; text-align:center; color:var(--muted); font-size:0.85rem; }
+
+  .ref-code { font-family:'Space Mono',monospace; font-size:0.72rem; color:var(--green); }
+  .badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:0.68rem; font-family:'Space Mono',monospace; }
+  .badge.confirmed { background:rgba(74,222,128,0.1); color:var(--green); border:1px solid var(--green-dim); }
+  .badge.cancelled { background:rgba(239,68,68,0.1); color:var(--danger); border:1px solid rgba(239,68,68,0.3); }
+  .badge.topup { background:rgba(74,222,128,0.1); color:var(--green); border:1px solid var(--green-dim); }
+  .badge.deduction { background:rgba(239,68,68,0.1); color:var(--danger); border:1px solid rgba(239,68,68,0.3); }
+  .amount-pos { color:var(--green); font-weight:500; }
+  .amount-neg { color:var(--danger); font-weight:500; }
+
+  /* TOPUP MODAL */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:200; align-items:center; justify-content:center; backdrop-filter:blur(4px); }
+  .modal-overlay.show { display:flex; }
+  .modal-box { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:2rem; max-width:380px; width:90%; text-align:center; }
+  .modal-title { font-family:'Bebas Neue',sans-serif; font-size:1.6rem; letter-spacing:0.04em; margin-bottom:0.5rem; }
+  .modal-body { color:var(--muted); font-size:0.85rem; line-height:1.7; margin-bottom:1.5rem; }
+  .modal-body strong { color:var(--green); }
+  .btn-modal-close { background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:0.75rem 1.5rem; font-family:'DM Sans',sans-serif; font-size:0.9rem; cursor:pointer; }
+
+  /* TOAST */
+  .toast { position:fixed; bottom:2rem; left:50%; transform:translateX(-50%) translateY(100px); padding:0.75rem 1.5rem; border-radius:8px; font-size:0.85rem; z-index:300; transition:transform 0.3s; }
+  .toast.show { transform:translateX(-50%) translateY(0); }
+  .toast.success { background:var(--green); color:#000; }
+  .toast.error { background:var(--danger); color:white; }
+
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .spinner { display:inline-block; width:14px; height:14px; border:2px solid var(--border); border-top-color:var(--green); border-radius:50%; animation:spin 0.6s linear infinite; }
+
+  @media(max-width:600px) {
+    #dashboard { padding:1rem; }
+    .stats-row { grid-template-columns:repeat(3,1fr); gap:0.5rem; }
+    .stat-mini { padding:0.75rem; }
+    .stat-mini-val { font-size:1.3rem; }
+    .topup-card { flex-direction:column; align-items:flex-start; }
+    .balance-amount { font-size:2.8rem; }
+    th, td { padding:0.6rem 0.75rem; }
+    .tabs { overflow-x:auto; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">MATCH<span>-</span>BOX</div>
+  <div class="header-right">
+    <span class="member-tag" id="memberTag"></span>
+    <button class="btn-logout" id="btnLogout" onclick="logout()">Sign out</button>
+    <a id="bookSlotLink" href="matchbox-booking.html" style="font-size:0.78rem;color:var(--green);text-decoration:none;font-family:'Space Mono',monospace;letter-spacing:0.05em;border:1px solid var(--green-dim);padding:4px 12px;border-radius:20px;background:rgba(74,222,128,0.08);">⚡ Book a Slot</a>
+  </div>
+</header>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-icon">⚡</div>
+    <div class="login-title">Members Portal</div>
+    <p class="login-sub">Enter your invite code to access your wallet and booking history.</p>
+    <input type="text" class="login-input" id="inviteInput" placeholder="INVITE CODE"
+      maxlength="20" oninput="this.value=this.value.toUpperCase()"
+      onkeydown="if(event.key==='Enter') doLogin()">
+    <div class="login-error" id="loginError"></div>
+    <button class="btn-login" id="btnLogin" onclick="doLogin()">Enter</button>
+    <p class="login-note">Don't have an invite code? Contact Match-Box to become a member.</p>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard">
+
+  <!-- BALANCE CARD -->
+  <div class="balance-card">
+    <div class="balance-label">Wallet balance</div>
+    <div class="balance-amount" id="balanceAmount">₹0</div>
+    <div class="balance-meta" id="balanceMeta"></div>
+    <div class="owed-badge" id="owedBadge" style="display:none"></div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-row">
+    <div class="stat-mini">
+      <div class="stat-mini-label">Total bookings</div>
+      <div class="stat-mini-val" id="statBookings">—</div>
+    </div>
+    <div class="stat-mini">
+      <div class="stat-mini-label">Total spent</div>
+      <div class="stat-mini-val" id="statSpent">—</div>
+    </div>
+    <div class="stat-mini">
+      <div class="stat-mini-label">Member since</div>
+      <div class="stat-mini-val" id="statSince">—</div>
+    </div>
+  </div>
+
+  <!-- PAY NOW (only shown when balance is negative) -->
+  <div class="topup-card" id="payNowCard" style="display:none;">
+    <div>
+      <strong>Outstanding balance</strong>
+      <p id="payNowDesc">You have an outstanding amount. Pay now to clear your balance.</p>
+    </div>
+    <button class="btn-topup" onclick="showPayNow()">Pay Now</button>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('bookings',this)">Bookings</div>
+    <div class="tab" onclick="switchTab('transactions',this)">Wallet history</div>
+  </div>
+
+  <!-- BOOKINGS TAB -->
+  <div id="tabBookings">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Ref</th><th>Date</th><th>Sport</th><th>Centre</th><th>Time</th><th>Amount</th><th>Status</th></tr>
+        </thead>
+        <tbody id="bookingsList">
+          <tr><td colspan="7" class="empty-table"><span class="spinner"></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TRANSACTIONS TAB -->
+  <div id="tabTransactions" style="display:none">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Date</th><th>Type</th><th>Amount</th><th>Note</th><th>Ref</th></tr>
+        </thead>
+        <tbody id="transactionsList">
+          <tr><td colspan="5" class="empty-table"><span class="spinner"></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- PAY NOW MODAL -->
+<div class="modal-overlay" id="payNowModal">
+  <div class="modal-box">
+    <div class="modal-title">Pay Now</div>
+    <p style="color:var(--muted);font-size:0.85rem;margin-bottom:1.5rem;line-height:1.5;">Enter the amount you'd like to pay towards your Match-Box balance.</p>
+    <div style="margin-bottom:1.25rem;">
+      <label style="display:block;font-size:0.7rem;font-family:'Space Mono',monospace;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.5rem;">Amount</label>
+      <div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;overflow:hidden;" id="payAmtWrap">
+        <span style="padding:0 0.75rem;font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--green);">₹</span>
+        <input type="number" id="payAmount" placeholder="0" min="1"
+          style="flex:1;background:none;border:none;padding:0.75rem 0.75rem 0.75rem 0;color:var(--text);font-family:'Bebas Neue',sans-serif;font-size:1.3rem;outline:none;"
+          oninput="onPayAmtInput(this.value)"
+          onfocus="document.getElementById('payAmtWrap').style.borderColor='var(--green)'"
+          onblur="document.getElementById('payAmtWrap').style.borderColor=''">
+      </div>
+      <div id="payAmtError" style="color:var(--danger);font-size:0.75rem;font-family:'Space Mono',monospace;min-height:1.2rem;margin-top:4px;"></div>
+    </div>
+    <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:0.75rem 1rem;margin-bottom:1.25rem;font-size:0.78rem;color:var(--warning);font-family:'Space Mono',monospace;line-height:1.5;">
+      Online payments coming soon.<br>To pay now contact: <strong>+91 96201 92323</strong>
+    </div>
+    <div style="display:flex;gap:0.75rem;">
+      <button onclick="closePayNow()" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:0.85rem;cursor:pointer;font-family:'DM Sans',sans-serif;">Cancel</button>
+      <button id="btnProceedPay" onclick="proceedPay()" disabled
+        style="flex:2;background:var(--green);color:#000;border:none;border-radius:8px;padding:0.85rem;font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:0.08em;cursor:pointer;opacity:0.5;">
+        Proceed
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const API = 'https://matchbox-booking-production.up.railway.app';
+
+  let currentMember = null;
+  let memberData = null;
+
+  // ── AUTH ──────────────────────────────────────────────
+  async function doLogin() {
+    const code = document.getElementById('inviteInput').value.trim().toUpperCase();
+    const errEl = document.getElementById('loginError');
+    const btn = document.getElementById('btnLogin');
+    if (!code) { errEl.textContent = 'Enter your invite code'; return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Checking...';
+    errEl.textContent = '';
+
+    try {
+      const res = await fetch(`${API}/api/members/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invite_code: code }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errEl.textContent = data.error || 'Invalid invite code';
+        document.getElementById('inviteInput').classList.add('error');
+        btn.disabled = false;
+        btn.textContent = 'Enter';
+        return;
+      }
+      currentMember = data.member;
+      sessionStorage.setItem('mbMember', JSON.stringify(currentMember));
+      showDashboard();
+      await loadMemberData();
+    } catch {
+      errEl.textContent = 'Could not connect. Please try again.';
+      btn.disabled = false;
+      btn.textContent = 'Enter';
+    }
+  }
+
+  function logout() {
+    sessionStorage.removeItem('mbMember');
+    currentMember = null;
+    memberData = null;
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('memberTag').style.display = 'none';
+    document.getElementById('btnLogout').style.display = 'none';
+    document.getElementById('inviteInput').value = '';
+    document.getElementById('loginError').textContent = '';
+    document.getElementById('btnLogin').disabled = false;
+    document.getElementById('btnLogin').textContent = 'Enter';
+  }
+
+  function showDashboard() {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('memberTag').style.display = 'inline-block';
+    document.getElementById('memberTag').textContent = currentMember.name;
+    document.getElementById('btnLogout').style.display = 'block';
+    // Set book slot link with member data in URL
+    const link = document.getElementById('bookSlotLink');
+    if (link) {
+      const memberParam = encodeURIComponent(JSON.stringify(currentMember));
+      link.href = 'matchbox-booking.html?member=' + memberParam;
+    }
+  }
+
+  // ── LOAD DATA ─────────────────────────────────────────
+  async function loadMemberData() {
+    try {
+      const res = await fetch(`${API}/api/members/${currentMember.id}`);
+      memberData = await res.json();
+      // Update currentMember with fresh balance
+      currentMember = { ...currentMember, ...memberData.member };
+      sessionStorage.setItem('mbMember', JSON.stringify(currentMember));
+      // Update book slot link with fresh balance
+      const link = document.getElementById('bookSlotLink');
+      if (link) {
+        const memberParam = encodeURIComponent(JSON.stringify(currentMember));
+        link.href = 'matchbox-booking.html?member=' + memberParam;
+      }
+      renderBalance(memberData.member);
+      renderBookings(memberData.bookings);
+      renderTransactions(memberData.transactions);
+    } catch {
+      showToast('Could not load data', 'error');
+    }
+  }
+
+  function renderBalance(m) {
+    const bal = parseFloat(m.balance);
+    const payCard = document.getElementById('payNowCard');
+    const payDesc = document.getElementById('payNowDesc');
+    if (payCard) {
+      if (bal < 0) {
+        payCard.style.display = 'flex';
+        if (payDesc) payDesc.textContent = `You owe ₹${Math.abs(bal).toLocaleString('en-IN')}. Pay now to clear your balance.`;
+      } else {
+        payCard.style.display = 'none';
+      }
+    }
+    const el = document.getElementById('balanceAmount');
+    const meta = document.getElementById('balanceMeta');
+    const owed = document.getElementById('owedBadge');
+
+    el.textContent = '₹' + Math.abs(bal).toLocaleString('en-IN');
+    el.className = 'balance-amount ' + (bal > 0 ? 'positive' : bal < 0 ? 'negative' : 'zero');
+    meta.textContent = bal >= 0 ? 'Available to spend on bookings' : 'Please settle your balance';
+
+    if (bal < 0) {
+      owed.style.display = 'inline-block';
+      owed.textContent = `You owe ₹${Math.abs(bal).toLocaleString('en-IN')}`;
+    } else {
+      owed.style.display = 'none';
+    }
+
+    // Stats
+    const bookings = memberData?.bookings || [];
+    const confirmed = bookings.filter(b => b.status === 'confirmed');
+    const totalSpent = confirmed.reduce((s, b) => s + parseFloat(b.total_amount || 0), 0);
+    document.getElementById('statBookings').textContent = confirmed.length;
+    document.getElementById('statSpent').textContent = '₹' + totalSpent.toLocaleString('en-IN');
+    const since = new Date(m.created_at);
+    document.getElementById('statSince').textContent = since.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+  }
+
+  function fmtDate(d) {
+    if (!d) return '—';
+    const dt = new Date(d);
+    return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  function fmtTime(t) {
+    if (!t) return '—';
+    const preMatch = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (preMatch) {
+      const h = parseInt(preMatch[1]);
+      const m = parseInt(preMatch[2]);
+      const ampm = preMatch[3].toUpperCase();
+      const hour = h % 12 || 12;
+      return m === 0 ? `${hour}${ampm}` : `${hour}:${preMatch[2]}${ampm}`;
+    }
+    return t;
+  }
+
+  function renderBookings(bookings) {
+    const tbody = document.getElementById('bookingsList');
+    if (!bookings?.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-table">No bookings yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = bookings.map(b => `
+      <tr>
+        <td><span class="ref-code">${b.ref_code}</span></td>
+        <td style="font-size:0.78rem;">${fmtDate(b.booking_date)}</td>
+        <td>${b.sport}${b.court_type ? ' · ' + b.court_type : ''}</td>
+        <td>${b.location}</td>
+        <td style="font-family:'Space Mono',monospace;font-size:0.72rem;">${fmtTime(b.start_time)}–${fmtTime(b.end_time)}</td>
+        <td class="amount-neg">-₹${parseFloat(b.total_amount).toLocaleString('en-IN')}</td>
+        <td><span class="badge ${b.status}">${b.status}</span></td>
+      </tr>
+    `).join('');
+  }
+
+  function renderTransactions(txs) {
+    const tbody = document.getElementById('transactionsList');
+    if (!txs?.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-table">No transactions yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = txs.map(t => `
+      <tr>
+        <td style="font-family:'Space Mono',monospace;font-size:0.72rem;">${fmtDate(t.created_at)}</td>
+        <td><span class="badge ${t.type}">${t.type}</span></td>
+        <td class="${t.type === 'topup' ? 'amount-pos' : 'amount-neg'}">
+          ${t.type === 'topup' ? '+' : '-'}₹${parseFloat(t.amount).toLocaleString('en-IN')}
+        </td>
+        <td style="color:var(--muted);font-size:0.8rem;">${t.note || '—'}</td>
+        <td style="font-family:'Space Mono',monospace;font-size:0.7rem;color:var(--muted);">${t.reference || '—'}</td>
+      </tr>
+    `).join('');
+  }
+
+  // ── TABS ──────────────────────────────────────────────
+  function switchTab(tab, el) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('tabBookings').style.display = tab === 'bookings' ? 'block' : 'none';
+    document.getElementById('tabTransactions').style.display = tab === 'transactions' ? 'block' : 'none';
+  }
+
+  function showPayNow() {
+    const bal = parseFloat(currentMember?.balance || 0);
+    const owed = Math.abs(bal);
+    document.getElementById('payNowModal').classList.add('show');
+    const input = document.getElementById('payAmount');
+    if (input && bal < 0) { input.value = owed; input.max = owed; }
+    const errEl = document.getElementById('payAmtError');
+    if (errEl) errEl.textContent = '';
+    const btn = document.getElementById('btnProceedPay');
+    if (btn) { btn.style.opacity = '1'; btn.disabled = false; }
+  }
+
+  function closePayNow() {
+    document.getElementById('payNowModal').classList.remove('show');
+    document.getElementById('payAmount').value = '';
+    document.getElementById('payAmtError').textContent = '';
+  }
+
+  function onPayAmtInput(val) {
+    const amt = parseFloat(val);
+    const owed = Math.abs(parseFloat(currentMember?.balance || 0));
+    const btn = document.getElementById('btnProceedPay');
+    const err = document.getElementById('payAmtError');
+    if (!val || amt <= 0) {
+      err.textContent = 'Enter a valid amount';
+      btn.disabled = true; btn.style.opacity = '0.5'; return;
+    }
+    if (amt > owed) {
+      err.textContent = 'Maximum payable is ₹' + owed.toLocaleString('en-IN');
+      btn.disabled = true; btn.style.opacity = '0.5'; return;
+    }
+    err.textContent = '';
+    btn.disabled = false; btn.style.opacity = '1';
+  }
+
+  async function proceedPay() {
+    const amt = parseFloat(document.getElementById('payAmount').value);
+    if (!amt || amt <= 0) return;
+    // Razorpay integration goes here when ready
+    // For now show coming soon
+    document.getElementById('payAmtError').textContent = 'Online payment coming soon — contact +91 96201 92323';
+  }
+
+  // ── TOAST ─────────────────────────────────────────────
+  function showToast(msg, type='success') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = `toast ${type} show`;
+    setTimeout(() => el.classList.remove('show'), 3500);
+  }
+
+  // ── INIT ──────────────────────────────────────────────
+  const saved = sessionStorage.getItem('mbMember');
+  if (saved) {
+    currentMember = JSON.parse(saved);
+    showDashboard();
+    loadMemberData();
+  }
+</script>
+</body>
+</html>

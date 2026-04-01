@@ -357,7 +357,7 @@ const API = 'https://matchbox-booking-production.up.railway.app';
 let loggedInMember = null;
 try {
   const up = new URLSearchParams(window.location.search).get('member');
-  if (up) { loggedInMember = JSON.parse(decodeURIComponent(up)); sessionStorage.setItem('mbMember', JSON.stringify(loggedInMember)); }
+  if (up) { loggedInMember = JSON.parse(decodeURIComponent(up)); }
   else { const sv = sessionStorage.getItem('mbMember'); if (sv) loggedInMember = JSON.parse(sv); }
 } catch {}
 
@@ -664,7 +664,7 @@ async function confirmBooking() {
     const data=await res.json();
     if (!res.ok) { showToast(data.error||'Booking failed'); btn.disabled=false; btn.textContent='Confirm Booking'; if(res.status===409){clearLock();S.slots=[];goTo('slots');} return; }
     clearLock();
-    if (loggedInMember) { const t=S.slots.reduce((s,sl)=>s+sl.price,0); loggedInMember.balance=(parseFloat(loggedInMember.balance)||0)-t; sessionStorage.setItem('mbMember',JSON.stringify(loggedInMember)); }
+    if (loggedInMember) { const t=S.slots.reduce((s,sl)=>s+sl.price,0); loggedInMember.balance=(parseFloat(loggedInMember.balance)||0)-t; }
     document.getElementById('refNum').textContent=data.booking.ref_code;
     document.getElementById('confirmDetails').innerHTML=`
       <div class="row"><span class="key">Sport</span><span>${S.sport}${S.courtType&&COURT_TYPE_SPORTS.includes(S.sport)?' · '+S.courtType:''}</span></div>

@@ -540,12 +540,27 @@
   }
 
   // ── INIT ──────────────────────────────────────────────
-  const saved = sessionStorage.getItem('mbMember');
-  if (saved) {
-    currentMember = JSON.parse(saved);
-    showDashboard();
-    loadMemberData();
+  function initPage() {
+    const saved = sessionStorage.getItem('mbMember');
+    if (saved) {
+      currentMember = JSON.parse(saved);
+      showDashboard();
+      loadMemberData();
+    } else {
+      // Make sure login screen is visible and dashboard is hidden
+      document.getElementById('loginScreen').style.display = 'flex';
+      document.getElementById('dashboard').style.display = 'none';
+      document.getElementById('memberTag').style.display = 'none';
+      document.getElementById('btnLogout').style.display = 'none';
+    }
   }
+
+  initPage();
+
+  // Handle back button — bfcache can restore a logged-in state after logout
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted) initPage();
+  });
 </script>
 </body>
 </html>

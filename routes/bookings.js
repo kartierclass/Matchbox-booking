@@ -66,6 +66,20 @@ router.get('/slots', async (req, res) => {
     const slotData = await Promise.all(rows.map(async (r) => {
       let status = 'available';
 
+      // Check for blocked booking first
+      const blockedCheck = await pool.query(
+        `SELECT id FROM bookings WHERE slot_id = $1 AND booking_date = $2 AND status = 'blocked'`,
+        [r.id, date]
+      );
+      if (blockedCheck.rows.length > 0) {
+        return {
+          id: r.id, sport: r.sport, court_type: r.court_type,
+          time: `${fmtTime(r.start_time)}–${fmtTime(r.end_time)}`,
+          start_time: r.start_time, end_time: r.end_time,
+          price: parseFloat(r.price), status: 'blocked',
+        };
+      }
+
       if (isPitchSport) {
         // Get all bookings for this turf/sport/start_time on this date (both Half and Full)
         const cap = await pool.query(`
@@ -557,6 +571,7 @@ router.get('/customers', async (req, res) => {
         MAX(b.created_at) AS last_booking
       FROM customers c
       LEFT JOIN bookings b ON b.customer_id = c.id AND b.status != 'cancelled'
+      WHERE c.phone != 'BLOCKED'
       GROUP BY c.id
       ORDER BY total_bookings DESC, c.created_at DESC
     `);

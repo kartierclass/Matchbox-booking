@@ -528,7 +528,7 @@ function toggleSlot(el,id,time,price) {
   const idx=S.slots.findIndex(s=>s.id===id);
   if (idx>=0) { S.slots.splice(idx,1); el.classList.remove('selected'); el.style.borderColor=''; el.style.background=''; }
   else {
-    if (S.slots.length>=6) { showToast('Maximum 6 slots per booking'); return; }
+    if (S.slots.length>=8) { showToast('Maximum 8 slots per booking'); return; }
     S.slots.push({id,time,price}); el.classList.add('selected');
     el.style.borderColor='var(--green)'; el.style.background='rgba(74,222,128,0.08)';
   }
